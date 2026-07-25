@@ -7031,7 +7031,6 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
 
     const updatedComplaint = updateResult.rows[0];
 
-    // NOTIFY CARETAKER IF FIX IS REJECTED
     if (!approved && updatedComplaint) {
       try {
         const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
@@ -7054,7 +7053,7 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
 });
 
 // =================================================================
-// 7. GET COMPLAINTS (DIRECT BASE64 RETURN - NO EXTRA ENDPOINTS)
+// 7. GET COMPLAINTS
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
