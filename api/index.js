@@ -5626,17 +5626,29 @@ const uploadToCloudinary = (fileBuffer) => {
 };
 
 // 🛠️ NODEMAILER FIX: Use Port 465 with Secure SSL & Timeouts to prevent ETIMEDOUT on Vercel
+// const transporter = nodemailer.createTransport({
+//   host: 'smtp.gmail.com',
+//   port: 465,
+//   secure: true, // SSL
+//   auth: {
+//     user: process.env.EMAIL_USER,
+//     pass: process.env.EMAIL_PASS
+//   },
+//   connectionTimeout: 10000, // 10s connection timeout
+//   greetingTimeout: 5000,    // 5s greeting timeout
+//   socketTimeout: 10000
+// });
+
+// --- Nodemailer Transporter using Gmail OAuth2 ---
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // SSL
+  service: 'gmail',
   auth: {
+    type: 'OAuth2',
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  connectionTimeout: 10000, // 10s connection timeout
-  greetingTimeout: 5000,    // 5s greeting timeout
-  socketTimeout: 10000
+    clientId: process.env.GMAIL_CLIENT_ID,
+    clientSecret: process.env.GMAIL_CLIENT_SECRET,
+    refreshToken: process.env.GMAIL_REFRESH_TOKEN
+  }
 });
 
 function getCaretakerEmail(hostelName) {
