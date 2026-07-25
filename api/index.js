@@ -6799,7 +6799,20 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: studentEmail,
       subject: '🔑 OTP for Hostel Complaint Submission',
-      text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 5 minutes.`
+      // text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 5 minutes.`
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+        <p style="color: #555; font-size: 14px;">Dear Student,</p>
+        <p style="color: #555; font-size: 14px;">Use the following One-Time Password (OTP) to complete your hostel complaint submission:</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #27ae60; background: #e8f8f5; padding: 10px 20px; border-radius: 6px; border: 1px dashed #27ae60; display: inline-block;">${otp}</span>
+        </div>
+        <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Please do not share this code with anyone.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #95a5a6; font-size: 12px; margin: 0;">This is an automated message from the Hostel Maintenance System. Please do not reply to this email.</p>
+      </div>
+    `
     });
 
     return res.json({ 
