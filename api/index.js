@@ -3105,7 +3105,20 @@ app.get('/api/complaints', async (req, res) => {
 });
 
 // POST Request Submission OTP
-app.post('/api/complaints/request-submission-otp', upload.single('photo'), async (req, res) => {
+// app.post('/api/complaints/request-submission-otp', upload.single('photo'), async (req, res) => {
+//   try {
+//     const { hostel, kerberos, category, description } = req.body;
+
+//     if (!hostel || !kerberos || !category || !description) {
+//       return res.status(400).json({ error: 'Missing required fields' });
+//     }
+
+//     let photoUrl = null;
+//     if (req.file) {
+//       photoUrl = await uploadToCloudinary(req.file.buffer);
+//     }
+
+app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
     const { hostel, kerberos, category, description } = req.body;
 
@@ -3114,8 +3127,9 @@ app.post('/api/complaints/request-submission-otp', upload.single('photo'), async
     }
 
     let photoUrl = null;
-    if (req.file) {
-      photoUrl = await uploadToCloudinary(req.file.buffer);
+    const file = req.files && req.files.length > 0 ? req.files[0] : null;
+    if (file) {
+      photoUrl = await uploadToCloudinary(file.buffer);
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
