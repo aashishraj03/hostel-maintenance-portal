@@ -3039,9 +3039,17 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 // 2. PostgreSQL Connection Pool
+// 2. PostgreSQL Connection Pool with serverless error handling
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
 });
 
 // Database Init
@@ -3083,8 +3091,10 @@ function getCaretakerEmail(hostelName) {
 const pendingSubmissions = new Map();
 const pendingCaretakerFixes = new Map();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// app.use(express.json());
+// app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // --- API ENDPOINTS ---
