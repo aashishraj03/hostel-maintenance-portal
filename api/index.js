@@ -3120,10 +3120,16 @@ app.get('/api/complaints', async (req, res) => {
 
 app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
-    const { hostel, kerberos, category, description } = req.body;
+    const hostel = req.body.hostel || req.body.hostel_name;
+    const kerberos = req.body.kerberos || req.body.kerberos_id;
+    const category = req.body.category;
+    const description = req.body.description;
 
     if (!hostel || !kerberos || !category || !description) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ 
+        error: 'Missing required fields', 
+        received: { hostel, kerberos, category, description } 
+      });
     }
 
     let photoUrl = null;
