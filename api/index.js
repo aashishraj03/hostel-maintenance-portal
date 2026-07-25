@@ -5144,7 +5144,6 @@ const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
-const path = require('path');
 
 const app = express();
 
@@ -5152,10 +5151,14 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// --- PostgreSQL Pool Setup (Serverless Safe) ---
+// Clean SSL setup to prevent node deprecation warnings
+const dbUrl = (process.env.DATABASE_URL || '').split('?')[0]; 
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  connectionString: dbUrl || process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  },
   max: 1,
   connectionTimeoutMillis: 10000
 });
@@ -5164,7 +5167,7 @@ pool.on('error', (err) => {
   console.error('Idle PostgreSQL pool error:', err.message || err);
 });
 
-// Helper: Ensure DB tables exist without crashing top-level runtime
+// Middleware for lazy, safe database table setup
 let dbInitialized = false;
 const ensureDb = async () => {
   if (dbInitialized) return;
@@ -5210,11 +5213,10 @@ const ensureDb = async () => {
 
     dbInitialized = true;
   } catch (err) {
-    console.error("Database setup warning:", err.message || err);
+    console.error("Database setup notice:", err.message || err);
   }
 };
 
-// Safe DB Middleware
 app.use(async (req, res, next) => {
   await ensureDb();
   next();
@@ -5227,7 +5229,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// --- Multer Memory Storage ---
+// --- Multer Storage ---
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -5256,7 +5258,6 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// --- Caretaker Email Mapping ---
 function getCaretakerEmail(hostelName) {
   const map = {
     'Aravali': 'aashishraj0310@gmail.com',
