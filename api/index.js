@@ -3218,10 +3218,11 @@ app.use(express.static(path.join(__dirname, '../public')));
 // --- PostgreSQL Pool Setup (Serverless Friendly) ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  ssl: {
+    rejectUnauthorized: false
+  },
+  max: 1, // Keep max connections low for Vercel serverless
+  connectionTimeoutMillis: 10000 // Give it 10s to connect
 });
 
 pool.on('error', (err) => {
@@ -3242,6 +3243,7 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    console.log("Database initialized successfully!");
   } catch (err) {
     console.error("Failed to initialize pending_otps table:", err.message || err);
   }
@@ -3289,9 +3291,6 @@ const transporter = nodemailer.createTransport({
 function getCaretakerEmail(hostelName) {
   const map = {
     'Aravali': 'aashishraj0310@gmail.com',
-    'Nilgiri': 'caretaker.nilgiri@iitd.ac.in',
-    'Karakoram': 'caretaker.kara@iitd.ac.in',
-    'Jwalamukhi': 'caretaker.jwala@iitd.ac.in'
   };
   return map[hostelName] || 'aashishraj0310@gmail.com';
 }
