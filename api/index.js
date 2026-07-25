@@ -3471,7 +3471,8 @@ app.post('/api/complaints/verify-fix-otp', async (req, res) => {
 });
 
 // Serve frontend fallback for SPA if needed
-app.get('*', (req, res) => {
+// Replace app.get('*', ...) with app.use():
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'index.html'), (err) => {
     if (err) {
       res.status(404).json({ error: 'Resource not found' });
