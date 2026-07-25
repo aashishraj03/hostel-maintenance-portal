@@ -5153,7 +5153,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-// --- PostgreSQL Pool Setup ---
+// --- PostgreSQL Connection Pool ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -5165,7 +5165,7 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle PostgreSQL client:', err.message || err);
 });
 
-// Helper: Ensure DB tables exist
+// Helper: Ensure database tables & required columns exist
 const initDb = async () => {
   try {
     await pool.query(`
@@ -5316,7 +5316,7 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       [cleanKerberos, otp, hostel, category, description, photoUrl]
     );
 
-    // ONLY SEND OTP MAIL HERE
+    // Send OTP email to student
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -5341,7 +5341,7 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
     const otp = req.body.userOtp || req.body.otp;
-    const kerberos = req.body.tempId || req.body.kerberos;
+    const kerberos = req.body.tempId || req.body.kerberos || req.body.kerberos_id;
 
     const cleanOtp = otp ? otp.toString().trim() : '';
     let cleanKerberos = kerberos ? kerberos.toString().trim().toLowerCase() : '';
@@ -5377,7 +5377,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    // 1. Insert complaint into DB
+    // Insert complaint into Database
     const result = await pool.query(
       `INSERT INTO complaints (hostel_name, kerberos_id, category, description, issue_photo, status)
        VALUES ($1, $2, $3, $4, $5, 'Pending') RETURNING *`,
@@ -5386,7 +5386,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     await pool.query(`DELETE FROM pending_otps WHERE kerberos = $1`, [cleanKerberos]);
 
-    // 2. 📩 NOW SEND NOTIFICATION MAIL TO CARETAKER (NEW ISSUE REPORTED)
+    // Send notification email to Caretaker AFTER complaint is created
     const caretakerEmail = getCaretakerEmail(pending.hostel);
     transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -5444,7 +5444,7 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
       [id, otp, action_type, fixPhotoUrl]
     );
 
-    // ONLY SEND CARETAKER OTP MAIL HERE
+    // Send Caretaker OTP email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: caretakerEmail,
@@ -5485,7 +5485,7 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     const caretakerData = otpResult.rows[0];
 
-    // 1. Update status in database
+    // Update status in Database
     const updated = await pool.query(
       `UPDATE complaints 
        SET status = 'Awaiting Student Verification', 
@@ -5500,7 +5500,7 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
     const complaint = updated.rows[0];
     const studentEmail = `${complaint.kerberos_id.trim().toLowerCase()}@iitd.ac.in`;
 
-    // 2. 📩 NOW SEND NOTIFICATION MAIL TO STUDENT (FIX COMPLETED)
+    // Send notification email to Student AFTER caretaker marks fixed
     transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -5553,7 +5553,7 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
       [id, otp, purpose || 'verify']
     );
 
-    // ONLY SEND STUDENT ACTION OTP MAIL HERE
+    // Send Student Action OTP email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -5620,7 +5620,7 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
       );
       updatedComplaint = resQuery.rows[0];
 
-      // 📩 NOW SEND NOTIFICATION MAIL TO CARETAKER (REJECTED ISSUE REOPENED)
+      // Send notification email to Caretaker AFTER student rejects fix
       const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
       transporter.sendMail({
         from: process.env.EMAIL_USER,
