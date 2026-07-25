@@ -3360,10 +3360,9 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
     res.json({
       success: true,
       message: 'OTP sent successfully',
-      email: studentEmail,
+      emailSentTo: studentEmail,
       studentEmail: studentEmail,
-      recipient: studentEmail,
-      to: studentEmail,
+      email : studentEmail,
       kerberos: cleanKerberos
     });
   } catch (err) {
