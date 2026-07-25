@@ -6866,7 +6866,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
     try {
       const caretakerEmail = getCaretakerEmail(pending.hostel_name);
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
         to: caretakerEmail,
         subject: `🚨 New Maintenance Request: ${pending.hostel_name}`,
         // text: `A new complaint has been lodged by student (${pending.kerberos_id}@iitd.ac.in):\n\nHostel: ${pending.hostel_name}\nCategory: ${pending.category}\nDescription: ${pending.description}`
@@ -7035,6 +7035,13 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
       purpose,
       expiresAt: Date.now() + 5 * 60 * 1000
     });
+
+
+    // Helper Variables Defined First
+    const actionLabel = purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix';
+    const actionDesc = purpose === 'verify' ? 'confirm resolution for' : 'reject resolution for';
+    const accentColor = purpose === 'verify' ? '#27ae60' : '#c0392b';
+    const accentBg = purpose === 'verify' ? '#e8f8f5' : '#fdf2e9';
 
     await transporter.sendMail({
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
