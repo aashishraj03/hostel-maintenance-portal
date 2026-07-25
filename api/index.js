@@ -3371,48 +3371,60 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
   }
 });
 
+// POST Verify Submission OTP
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
     const kerberos = req.body.kerberos || req.body.kerberos_id || req.body.username;
     const otp = req.body.otp || req.body.code || req.body.otpCode;
 
-    const cleanKerberos = kerberos ? kerberos.toString().trim().toLowerCase() : '';
     const cleanOtp = otp ? otp.toString().trim() : '';
+    let cleanKerberos = kerberos ? kerberos.toString().trim().toLowerCase() : '';
 
-    if (!cleanKerberos || !cleanOtp) {
-      return res.status(400).json({ 
-        error: 'Kerberos and OTP are required', 
-        received: req.body 
-      });
+    if (!cleanOtp) {
+      return res.status(400).json({ error: 'OTP code is required' });
     }
 
-    // Fetch pending submission from DB
-    const pendingResult = await pool.query(
-      `SELECT * FROM pending_otps WHERE kerberos = $1`,
-      [cleanKerberos]
-    );
+    let pending = null;
 
-    if (pendingResult.rows.length === 0) {
-      return res.status(400).json({ error: 'No pending submission found for this Kerberos ID' });
+    // 1. If kerberos ID was provided by frontend, look up by kerberos
+    if (cleanKerberos) {
+      const pendingResult = await pool.query(
+        `SELECT * FROM pending_otps WHERE kerberos = $1`,
+        [cleanKerberos]
+      );
+      if (pendingResult.rows.length > 0) {
+        pending = pendingResult.rows[0];
+      }
     }
 
-    const pending = pendingResult.rows[0];
-
-    if (pending.otp !== cleanOtp) {
-      return res.status(400).json({ error: 'Invalid OTP' });
+    // 2. Fallback: If kerberos was empty or missing, find pending record by matching OTP directly
+    if (!pending) {
+      const pendingByOtp = await pool.query(
+        `SELECT * FROM pending_otps WHERE otp = $1 ORDER BY created_at DESC LIMIT 1`,
+        [cleanOtp]
+      );
+      if (pendingByOtp.rows.length > 0) {
+        pending = pendingByOtp.rows[0];
+        cleanKerberos = pending.kerberos;
+      }
     }
 
-    // Insert new complaint into DB
+    // If still no record found or OTP doesn't match
+    if (!pending || pending.otp !== cleanOtp) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    }
+
+    // Insert new complaint into complaints table
     const result = await pool.query(
       `INSERT INTO complaints (hostel_name, kerberos_id, category, description, photo_url, status)
        VALUES ($1, $2, $3, $4, $5, 'OPEN') RETURNING *`,
       [pending.hostel, pending.kerberos, pending.category, pending.description, pending.photo_url]
     );
 
-    // Clean up OTP record from database
+    // Clean up used OTP record from database
     await pool.query(`DELETE FROM pending_otps WHERE kerberos = $1`, [cleanKerberos]);
 
-    // Send Notification to Caretaker
+    // Send email notification to caretaker
     const caretakerEmail = getCaretakerEmail(pending.hostel);
     transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -3421,10 +3433,10 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       text: `A new complaint has been lodged by ${pending.kerberos}:\n\nCategory: ${pending.category}\nDescription: ${pending.description}`
     }).catch(err => console.error("Caretaker mail error:", err));
 
-    res.json({ success: true, message: 'Complaint created successfully', complaint: result.rows[0] });
+    return res.json({ success: true, message: 'Complaint created successfully', complaint: result.rows[0] });
   } catch (err) {
     console.error("Verification Error:", err.message || err);
-    res.status(500).json({ error: err.message || 'Failed to verify OTP' });
+    return res.status(500).json({ error: err.message || 'Failed to verify OTP' });
   }
 });
 
