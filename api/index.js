@@ -5949,7 +5949,7 @@ import pg from 'pg';
 const app = express();
 const { Pool } = pg;
 
-// Native CORS middleware (No external 'cors' package required)
+// Built-in CORS middleware (No external 'cors' package required)
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -5969,14 +5969,14 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// --- Multer Configuration (3.5 MB max limit) ---
+// --- Multer Configuration (Memory Storage + 3.5MB Limit) ---
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 3.5 * 1024 * 1024 }
 });
 
-// --- Nodemailer Transporter (Gmail OAuth2) ---
+// --- Nodemailer Transporter (Gmail OAuth2 over HTTPS) ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -6004,27 +6004,39 @@ const otpStore = new Map();
 // =================================================================
 // 1. STUDENT SUBMITS COMPLAINT: REQUEST OTP
 // =================================================================
-app.post('/api/complaints/request-submission-otp', upload.single('image'), async (req, res) => {
+app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
-    const { kerberos_id, hostel, room_number, category, description } = req.body;
+    // Extract variables with fallbacks to support different frontend key names
+    const kerberos = req.body.kerberos_id || req.body.kerberos || req.body.student_id || req.body.username;
+    const hostel = req.body.hostel || req.body.hostel_name || req.body.hostelName;
+    const room = req.body.room_number || req.body.room_no || req.body.room || req.body.roomNumber;
+    const category = req.body.category || req.body.issue_type || req.body.type;
+    const description = req.body.description || req.body.desc || req.body.details;
 
-    if (!kerberos_id || !hostel || !room_number || !category || !description) {
+    if (!kerberos || !hostel || !room || !category || !description) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const studentEmail = `${kerberos_id}@iitd.ac.in`;
+    // Capture uploaded file regardless of field name used in FormData
+    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+
+    const studentEmail = req.body.email || `${kerberos}@iitd.ac.in`;
     const otp = generateOTP();
 
-    otpStore.set(`submission_${kerberos_id}`, {
+    // Store pending submission
+    otpStore.set(`submission_${kerberos}`, {
       otp,
-      kerberos: kerberos_id,
+      kerberos,
       hostel,
-      room_number,
+      room_number: room,
       category,
       description,
+      imageBuffer: uploadedFile ? uploadedFile.buffer : null,
+      imageMime: uploadedFile ? uploadedFile.mimetype : null,
       expiresAt: Date.now() + 5 * 60 * 1000
     });
 
+    // Send OTP to Student
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -6044,18 +6056,25 @@ app.post('/api/complaints/request-submission-otp', upload.single('image'), async
 // =================================================================
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
-    const { kerberos_id, userOtp } = req.body;
-    const pendingKey = `submission_${kerberos_id}`;
+    const kerberos = req.body.kerberos_id || req.body.kerberos || req.body.student_id;
+    const userOtp = req.body.userOtp || req.body.otp || req.body.enteredOtp;
+
+    if (!kerberos || !userOtp) {
+      return res.status(400).json({ error: "Kerberos ID and OTP are required" });
+    }
+
+    const pendingKey = `submission_${kerberos}`;
     const pending = otpStore.get(pendingKey);
 
     if (!pending || pending.expiresAt < Date.now()) {
       return res.status(400).json({ error: "OTP expired or invalid" });
     }
 
-    if (pending.otp !== userOtp) {
+    if (pending.otp !== String(userOtp).trim()) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
+    // Insert complaint into Database
     const insertQuery = `
       INSERT INTO complaints (kerberos_id, hostel, room_number, category, description, status, created_at)
       VALUES ($1, $2, $3, $4, $5, 'PENDING', NOW())
@@ -6071,7 +6090,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     otpStore.delete(pendingKey);
 
-    // Await sendMail so Vercel does not kill execution before mail completes
+    // Send Notification Email to Caretaker
     try {
       const caretakerEmail = getCaretakerEmail(pending.hostel);
       await transporter.sendMail({
@@ -6096,7 +6115,13 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 // =================================================================
 app.post('/api/complaints/request-caretaker-otp', async (req, res) => {
   try {
-    const { complaintId, hostel } = req.body;
+    const complaintId = req.body.complaintId || req.body.complaint_id || req.body.id;
+    const hostel = req.body.hostel || req.body.hostel_name;
+
+    if (!complaintId) {
+      return res.status(400).json({ error: "Complaint ID is required" });
+    }
+
     const caretakerEmail = getCaretakerEmail(hostel);
     const otp = generateOTP();
 
@@ -6121,11 +6146,17 @@ app.post('/api/complaints/request-caretaker-otp', async (req, res) => {
 });
 
 // =================================================================
-// 4. CARETAKER VERIFIES OTP (NOTIFIES STUDENT ISSUE RESOLVED)
+// 4. CARETAKER VERIFIES OTP (NOTIFIES STUDENT)
 // =================================================================
 app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
   try {
-    const { complaintId, userOtp } = req.body;
+    const complaintId = req.body.complaintId || req.body.complaint_id || req.body.id;
+    const userOtp = req.body.userOtp || req.body.otp;
+
+    if (!complaintId || !userOtp) {
+      return res.status(400).json({ error: "Complaint ID and OTP are required" });
+    }
+
     const pendingKey = `caretaker_${complaintId}`;
     const pending = otpStore.get(pendingKey);
 
@@ -6133,7 +6164,7 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
       return res.status(400).json({ error: "OTP expired or invalid" });
     }
 
-    if (pending.otp !== userOtp) {
+    if (pending.otp !== String(userOtp).trim()) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
@@ -6167,7 +6198,7 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
   }
 });
 
-// Fetch complaints route
+// Fetch Complaints Route
 app.get('/api/complaints', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM complaints ORDER BY created_at DESC');
