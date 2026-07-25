@@ -3118,6 +3118,7 @@ app.get('/api/complaints', async (req, res) => {
 //       photoUrl = await uploadToCloudinary(req.file.buffer);
 //     }
 
+// POST Request Submission OTP
 app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
     const hostel = req.body.hostel || req.body.hostel_name;
@@ -3126,10 +3127,7 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
     const description = req.body.description;
 
     if (!hostel || !kerberos || !category || !description) {
-      return res.status(400).json({ 
-        error: 'Missing required fields', 
-        received: { hostel, kerberos, category, description } 
-      });
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
     let photoUrl = null;
@@ -3139,9 +3137,10 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const studentEmail = `${kerberos}@iitd.ac.in`;
+    const studentEmail = `${kerberos.trim().toLowerCase()}@iitd.ac.in`;
 
-    pendingSubmissions.set(kerberos, {
+    // Store normalized Kerberos key
+    pendingSubmissions.set(kerberos.trim().toLowerCase(), {
       otp,
       hostel,
       kerberos,
@@ -3158,7 +3157,14 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       text: `Your OTP for submitting the complaint is: ${otp}`
     });
 
-    res.json({ message: 'OTP sent to student email successfully' });
+    // Return studentEmail and kerberos explicitly so frontend UI displays properly
+    res.json({ 
+      success: true,
+      message: 'OTP sent successfully', 
+      email: studentEmail, 
+      studentEmail: studentEmail,
+      kerberos: kerberos.trim().toLowerCase()
+    });
   } catch (err) {
     console.error("OTP Error Details:", err.message || err);
     res.status(500).json({ error: err.message || 'Failed to send OTP' });
@@ -3169,9 +3175,12 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
     const { kerberos, otp } = req.body;
-    const pending = pendingSubmissions.get(kerberos);
+    const cleanKerberos = kerberos ? kerberos.trim().toLowerCase() : '';
+    const cleanOtp = otp ? otp.toString().trim() : '';
 
-    if (!pending || pending.otp !== otp) {
+    const pending = pendingSubmissions.get(cleanKerberos);
+
+    if (!pending || pending.otp !== cleanOtp) {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
@@ -3181,8 +3190,8 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       [pending.hostel, pending.kerberos, pending.category, pending.description, pending.photoUrl]
     );
 
-    pendingSubmissions.delete(kerberos);
-    res.json({ message: 'Complaint created successfully', complaint: result.rows[0] });
+    pendingSubmissions.delete(cleanKerberos);
+    res.json({ success: true, message: 'Complaint created successfully', complaint: result.rows[0] });
   } catch (err) {
     console.error("Verification Error:", err.message || err);
     res.status(500).json({ error: err.message || 'Failed to verify OTP' });
