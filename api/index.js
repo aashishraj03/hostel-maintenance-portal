@@ -6869,7 +6869,22 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
         from: process.env.EMAIL_USER,
         to: caretakerEmail,
         subject: `🚨 New Maintenance Request: ${pending.hostel_name}`,
-        text: `A new complaint has been lodged by student (${pending.kerberos_id}@iitd.ac.in):\n\nHostel: ${pending.hostel_name}\nCategory: ${pending.category}\nDescription: ${pending.description}`
+        // text: `A new complaint has been lodged by student (${pending.kerberos_id}@iitd.ac.in):\n\nHostel: ${pending.hostel_name}\nCategory: ${pending.category}\nDescription: ${pending.description}`
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #e74c3c; margin-top: 0;">🚨 New Maintenance Issue Lodged</h2>
+          <p style="color: #555; font-size: 14px;">A new maintenance complaint requires your attention:</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+            <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${pending.hostel_name}</td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${pending.category}</td></tr>
+            <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${pending.kerberos_id}@iitd.ac.in</td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${pending.description}</td></tr>
+          </table>
+
+          <p style="color: #555; font-size: 13px;">Please log into the caretaker dashboard to review details and submit resolution proof once fixed.</p>
+        </div>
+      `
       });
     } catch (mailErr) {
       console.error("Failed to send caretaker notification email:", mailErr);
@@ -6916,7 +6931,17 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: caretakerEmail,
       subject: `🔑 OTP to Verify Fix for Issue #${id}`,
-      text: `Your OTP to submit resolution proof for Issue #${id} (${complaint.hostel_name}) is: ${otp}`
+      // text: `Your OTP to submit resolution proof for Issue #${id} (${complaint.hostel_name}) is: ${otp}`
+      html: `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+        <h2 style="color: #2980b9; margin-top: 0;">Resolution Proof Verification</h2>
+        <p style="color: #555; font-size: 14px;">Your OTP to verify and submit work proof for <strong>Issue #${id} (${complaint.hostel_name})</strong> is:</p>
+        <div style="text-align: center; margin: 25px 0;">
+          <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2980b9; background: #ebf5fb; padding: 10px 20px; border-radius: 6px; border: 1px dashed #2980b9; display: inline-block;">${otp}</span>
+        </div>
+        <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+      </div>
+    `
     });
 
     return res.json({ success: true, emailSentTo: caretakerEmail });
@@ -6964,7 +6989,17 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
           to: studentEmail,
           subject: `🔧 Maintenance Issue #${id} Fixed - Verification Required`,
-          text: `The caretaker has uploaded proof of fix for your complaint (#${id}). Please log into the portal to verify and confirm resolution.`
+          // text: `The caretaker has uploaded proof of fix for your complaint (#${id}). Please log into the portal to verify and confirm resolution.`
+          html: `
+          <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #27ae60; margin-top: 0;">🔧 Work Completed on Issue #${id}</h2>
+            <p style="color: #555; font-size: 14px;">The caretaker has uploaded proof of resolution for your maintenance complaint.</p>
+            <p style="color: #555; font-size: 14px;">Please log into the student portal to review the proof photo and either <strong>Confirm</strong> or <strong>Reject</strong> the resolution.</p>
+            <div style="margin: 20px 0; text-align: center;">
+              <span style="background: #fff8e1; color: #d35400; padding: 8px 12px; border-radius: 4px; font-size: 13px; font-weight: bold;">⚠️ Auto-resolves in 24 hours if no action is taken.</span>
+            </div>
+          </div>
+        `
         });
       } catch (mailErr) {
         console.error("Failed to send student notification email:", mailErr);
@@ -7005,7 +7040,22 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: studentEmail,
       subject: `🔑 OTP to ${purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix'} for Issue #${id}`,
-      text: `Your OTP to ${purpose === 'verify' ? 'confirm resolution' : 'reject resolution'} for Issue #${id} is: ${otp}`
+      // text: `Your OTP to ${purpose === 'verify' ? 'confirm resolution' : 'reject resolution'} for Issue #${id} is: ${otp}`
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+          <p style="color: #555; font-size: 14px;">Dear Student,</p>
+          <p style="color: #555; font-size: 14px;">Use the following One-Time Password (OTP) to <strong>${actionDesc} Issue #${id}</strong> (${complaint.hostel_name}):</p>
+          
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: ${accentColor}; background: ${accentBg}; padding: 10px 20px; border-radius: 6px; border: 1px dashed ${accentColor}; display: inline-block;">${otp}</span>
+          </div>
+          
+          <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Do not share this code with anyone.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="color: #95a5a6; font-size: 12px; margin: 0;">This is an automated notification from the Hostel Maintenance Portal.</p>
+        </div>
+      `
     });
 
     return res.json({ success: true, emailSentTo: studentEmail });
@@ -7066,7 +7116,19 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
           to: caretakerEmail,
           subject: `⚠️ Issue #${id} Fix Rejected by Student (${updatedComplaint.hostel_name})`,
-          text: `The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has REJECTED the fix for Issue #${id}.\n\nReason: "${rejection_reason || 'No specific reason given.'}"\n\nThe issue status has been reopened to 'Pending'.`
+          // text: `The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has REJECTED the fix for Issue #${id}.\n\nReason: "${rejection_reason || 'No specific reason given.'}"\n\nThe issue status has been reopened to 'Pending'.`
+          html: `
+          <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <h2 style="color: #c0392b; margin-top: 0;">⚠️ Resolution Rejected by Student</h2>
+            <p style="color: #555; font-size: 14px;">The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has <strong>rejected</strong> the fix provided for <strong>Issue #${id}</strong>.</p>
+            
+            <div style="background: #fdf2e9; border-left: 4px solid #e67e22; padding: 12px; margin: 15px 0; font-size: 14px; color: #a04000;">
+              <strong>Student Reason:</strong> "${rejection_reason || 'No specific reason given.'}"
+            </div>
+
+            <p style="color: #555; font-size: 13px;">The issue status has been reset to <strong>Pending</strong>. Please inspect and resolve the issue.</p>
+          </div>
+        `
         });
       } catch (mailErr) {
         console.error("Failed to send caretaker rejection notification:", mailErr);
