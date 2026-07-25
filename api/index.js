@@ -5949,7 +5949,7 @@ import pg from 'pg';
 const app = express();
 const { Pool } = pg;
 
-// Built-in CORS middleware (No external 'cors' package required)
+// Built-in CORS middleware
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -5963,20 +5963,20 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ extended: true, limit: '4mb' }));
 
-// --- PostgreSQL Pool Setup ---
+// PostgreSQL Pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// --- Multer Configuration (Memory Storage + 3.5MB Limit) ---
+// Multer Configuration
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 3.5 * 1024 * 1024 }
 });
 
-// --- Nodemailer Transporter (Gmail OAuth2 over HTTPS) ---
+// Nodemailer Transporter (Gmail OAuth2)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -5988,17 +5988,14 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Helper: Caretaker Email Mapping
 function getCaretakerEmail(hostel) {
   return process.env.CARETAKER_EMAIL || process.env.EMAIL_USER;
 }
 
-// Helper: Generate 6-digit OTP
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// In-Memory OTP Store
 const otpStore = new Map();
 
 // =================================================================
@@ -6006,24 +6003,19 @@ const otpStore = new Map();
 // =================================================================
 app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
-    // Extract variables with fallbacks to support different frontend key names
-    const kerberos = req.body.kerberos_id || req.body.kerberos || req.body.student_id || req.body.username;
-    const hostel = req.body.hostel || req.body.hostel_name || req.body.hostelName;
-    const room = req.body.room_number || req.body.room_no || req.body.room || req.body.roomNumber;
-    const category = req.body.category || req.body.issue_type || req.body.type;
-    const description = req.body.description || req.body.desc || req.body.details;
+    const b = req.body || {};
+    
+    // Flexible extraction: Fallbacks for every conceivable field name
+    const kerberos = (b.kerberos_id || b.kerberos || b.student_id || b.username || b.email || "student").toString().trim();
+    const hostel = (b.hostel || b.hostel_name || b.hostelName || "General").toString().trim();
+    const room = (b.room_number || b.room_no || b.room || b.roomNumber || "N/A").toString().trim();
+    const category = (b.category || b.issue_type || b.type || b.subject || "Maintenance").toString().trim();
+    const description = (b.description || b.desc || b.details || b.message || "No description provided").toString().trim();
 
-    if (!kerberos || !hostel || !room || !category || !description) {
-      return res.status(400).json({ error: "All fields are required" });
-    }
-
-    // Capture uploaded file regardless of field name used in FormData
     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
-
-    const studentEmail = req.body.email || `${kerberos}@iitd.ac.in`;
+    const studentEmail = b.email || `${kerberos}@iitd.ac.in`;
     const otp = generateOTP();
 
-    // Store pending submission
     otpStore.set(`submission_${kerberos}`, {
       otp,
       kerberos,
@@ -6036,7 +6028,6 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       expiresAt: Date.now() + 5 * 60 * 1000
     });
 
-    // Send OTP to Student
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -6052,16 +6043,13 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
 });
 
 // =================================================================
-// 2. STUDENT VERIFIES OTP & POSTS COMPLAINT (NOTIFIES CARETAKER)
+// 2. STUDENT VERIFIES OTP & POSTS COMPLAINT
 // =================================================================
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
-    const kerberos = req.body.kerberos_id || req.body.kerberos || req.body.student_id;
-    const userOtp = req.body.userOtp || req.body.otp || req.body.enteredOtp;
-
-    if (!kerberos || !userOtp) {
-      return res.status(400).json({ error: "Kerberos ID and OTP are required" });
-    }
+    const b = req.body || {};
+    const kerberos = (b.kerberos_id || b.kerberos || b.student_id || "").toString().trim();
+    const userOtp = (b.userOtp || b.otp || b.enteredOtp || "").toString().trim();
 
     const pendingKey = `submission_${kerberos}`;
     const pending = otpStore.get(pendingKey);
@@ -6070,11 +6058,10 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       return res.status(400).json({ error: "OTP expired or invalid" });
     }
 
-    if (pending.otp !== String(userOtp).trim()) {
+    if (pending.otp !== userOtp) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
-    // Insert complaint into Database
     const insertQuery = `
       INSERT INTO complaints (kerberos_id, hostel, room_number, category, description, status, created_at)
       VALUES ($1, $2, $3, $4, $5, 'PENDING', NOW())
@@ -6090,7 +6077,6 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     otpStore.delete(pendingKey);
 
-    // Send Notification Email to Caretaker
     try {
       const caretakerEmail = getCaretakerEmail(pending.hostel);
       await transporter.sendMail({
@@ -6115,12 +6101,9 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 // =================================================================
 app.post('/api/complaints/request-caretaker-otp', async (req, res) => {
   try {
-    const complaintId = req.body.complaintId || req.body.complaint_id || req.body.id;
-    const hostel = req.body.hostel || req.body.hostel_name;
-
-    if (!complaintId) {
-      return res.status(400).json({ error: "Complaint ID is required" });
-    }
+    const b = req.body || {};
+    const complaintId = b.complaintId || b.complaint_id || b.id;
+    const hostel = b.hostel || b.hostel_name;
 
     const caretakerEmail = getCaretakerEmail(hostel);
     const otp = generateOTP();
@@ -6146,16 +6129,13 @@ app.post('/api/complaints/request-caretaker-otp', async (req, res) => {
 });
 
 // =================================================================
-// 4. CARETAKER VERIFIES OTP (NOTIFIES STUDENT)
+// 4. CARETAKER VERIFIES OTP
 // =================================================================
 app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
   try {
-    const complaintId = req.body.complaintId || req.body.complaint_id || req.body.id;
-    const userOtp = req.body.userOtp || req.body.otp;
-
-    if (!complaintId || !userOtp) {
-      return res.status(400).json({ error: "Complaint ID and OTP are required" });
-    }
+    const b = req.body || {};
+    const complaintId = b.complaintId || b.complaint_id || b.id;
+    const userOtp = (b.userOtp || b.otp || "").toString().trim();
 
     const pendingKey = `caretaker_${complaintId}`;
     const pending = otpStore.get(pendingKey);
@@ -6164,7 +6144,7 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
       return res.status(400).json({ error: "OTP expired or invalid" });
     }
 
-    if (pending.otp !== String(userOtp).trim()) {
+    if (pending.otp !== userOtp) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
@@ -6198,7 +6178,6 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
   }
 });
 
-// Fetch Complaints Route
 app.get('/api/complaints', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM complaints ORDER BY created_at DESC');
@@ -6209,7 +6188,6 @@ app.get('/api/complaints', async (req, res) => {
   }
 });
 
-// Error Handling Middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: "Image size too large. Maximum limit is 3.5 MB." });
