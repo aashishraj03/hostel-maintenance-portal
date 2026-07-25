@@ -5942,7 +5942,6 @@
 
 
 import express from 'express';
-import cors from 'cors';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
 import pg from 'pg';
@@ -5950,8 +5949,17 @@ import pg from 'pg';
 const app = express();
 const { Pool } = pg;
 
-// Middleware
-app.use(cors());
+// Native CORS middleware (No external 'cors' package required)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ extended: true, limit: '4mb' }));
 
@@ -5961,14 +5969,14 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// --- Multer Configuration (Memory Storage + 3.5MB Limit) ---
+// --- Multer Configuration (3.5 MB max limit) ---
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 3.5 * 1024 * 1024 } // 3.5 MB max
+  limits: { fileSize: 3.5 * 1024 * 1024 }
 });
 
-// --- Nodemailer Transporter (Gmail OAuth2 over Port 443) ---
+// --- Nodemailer Transporter (Gmail OAuth2) ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -5982,7 +5990,6 @@ const transporter = nodemailer.createTransport({
 
 // Helper: Caretaker Email Mapping
 function getCaretakerEmail(hostel) {
-  // Replace or extend with your hostel mapping
   return process.env.CARETAKER_EMAIL || process.env.EMAIL_USER;
 }
 
@@ -5991,7 +5998,7 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// In-Memory OTP Store (For Serverless Lifecycles)
+// In-Memory OTP Store
 const otpStore = new Map();
 
 // =================================================================
@@ -6005,10 +6012,9 @@ app.post('/api/complaints/request-submission-otp', upload.single('image'), async
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const studentEmail = `${kerberos_id}@iitd.ac.in`; // or student email field
+    const studentEmail = `${kerberos_id}@iitd.ac.in`;
     const otp = generateOTP();
 
-    // Store pending complaint data with OTP
     otpStore.set(`submission_${kerberos_id}`, {
       otp,
       kerberos: kerberos_id,
@@ -6016,12 +6022,9 @@ app.post('/api/complaints/request-submission-otp', upload.single('image'), async
       room_number,
       category,
       description,
-      imageBuffer: req.file ? req.file.buffer : null,
-      imageMime: req.file ? req.file.mimetype : null,
-      expiresAt: Date.now() + 5 * 60 * 1000 // 5 mins
+      expiresAt: Date.now() + 5 * 60 * 1000
     });
 
-    // Send OTP to Student
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -6053,7 +6056,6 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
-    // Insert complaint into PostgreSQL
     const insertQuery = `
       INSERT INTO complaints (kerberos_id, hostel, room_number, category, description, status, created_at)
       VALUES ($1, $2, $3, $4, $5, 'PENDING', NOW())
@@ -6069,7 +6071,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     otpStore.delete(pendingKey);
 
-    // Await email to caretaker so Vercel process doesn't freeze mid-send
+    // Await sendMail so Vercel does not kill execution before mail completes
     try {
       const caretakerEmail = getCaretakerEmail(pending.hostel);
       await transporter.sendMail({
@@ -6135,7 +6137,6 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
-    // Update issue status to RESOLVED
     const updateResult = await pool.query(
       `UPDATE complaints SET status = 'RESOLVED', updated_at = NOW() WHERE id = $1 RETURNING *`,
       [complaintId]
@@ -6145,7 +6146,6 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
 
     const complaint = updateResult.rows[0];
 
-    // Await notification email to Student
     if (complaint && complaint.kerberos_id) {
       try {
         const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
@@ -6153,7 +6153,7 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
           from: process.env.EMAIL_USER,
           to: studentEmail,
           subject: `✅ Issue #${complaintId} Marked Resolved`,
-          text: `Your maintenance complaint (#${complaintId}) has been marked as RESOLVED by the hostel caretaker.\n\nIf you are not satisfied with the fix, you can reject the resolution in the portal.`
+          text: `Your maintenance complaint (#${complaintId}) has been marked as RESOLVED by the hostel caretaker.`
         });
       } catch (mailErr) {
         console.error("Failed to send student resolution email:", mailErr);
@@ -6167,13 +6167,23 @@ app.post('/api/complaints/verify-caretaker-otp', async (req, res) => {
   }
 });
 
-// Multer error handling middleware
+// Fetch complaints route
+app.get('/api/complaints', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM complaints ORDER BY created_at DESC');
+    return res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching complaints:", err);
+    return res.status(500).json({ error: "Failed to fetch complaints" });
+  }
+});
+
+// Error Handling Middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: "Image size too large. Maximum limit is 3.5 MB." });
   }
-  next(err);
+  return res.status(500).json({ error: err.message || "Internal Server Error" });
 });
 
-// Export Express App for Vercel
 export default app;
