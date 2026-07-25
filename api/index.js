@@ -7042,7 +7042,27 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
     const updateResult = await pool.query(updateQuery, queryParams);
     otpStore.delete(pendingKey);
 
-    return res.json({ success: true, complaint: updateResult.rows[0] });
+    // return res.json({ success: true, complaint: updateResult.rows[0] });
+    const updatedComplaint = updateResult.rows[0];
+
+    // SEND REJECTION EMAIL TO CARETAKER
+    if (!approved && updatedComplaint) {
+      try {
+        const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: caretakerEmail,
+          subject: `⚠️ Issue #${id} Fix Rejected by Student (${updatedComplaint.hostel_name})`,
+          text: `The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has REJECTED the fix for Issue #${id}.\n\nReason: "${rejection_reason || 'No specific reason given.'}"\n\nThe issue status has been reopened to 'Pending'.`
+        });
+      } catch (mailErr) {
+        console.error("Failed to send caretaker rejection notification:", mailErr);
+      }
+    }
+
+    return res.json({ success: true, complaint: updatedComplaint });
+
+
   } catch (err) {
     console.error("Error in verify-otp:", err);
     return res.status(500).json({ error: err.message || "Failed to process verification" });
