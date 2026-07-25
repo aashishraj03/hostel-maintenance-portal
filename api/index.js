@@ -6710,7 +6710,7 @@ import pg from 'pg';
 const app = express();
 const { Pool } = pg;
 
-// Built-in CORS headers
+// Built-in CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -6724,20 +6724,20 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ extended: true, limit: '4mb' }));
 
-// --- PostgreSQL Pool Setup ---
+// PostgreSQL Pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// --- Multer Configuration ---
+// Multer Config
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 3.5 * 1024 * 1024 }
 });
 
-// --- Nodemailer Transporter (Gmail OAuth2) ---
+// Nodemailer Config
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -6757,7 +6757,9 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-const otpStore = new Map();
+// Global OTP Store
+global.otpStore = global.otpStore || new Map();
+const otpStore = global.otpStore;
 
 // =================================================================
 // 1. STUDENT SUBMIT COMPLAINT: REQUEST OTP
@@ -6779,20 +6781,20 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
     const otp = generateOTP();
 
     otpStore.set(tempId, {
-      otp,
+      otp: String(otp).trim(),
       kerberos_id: kerberos_id.trim(),
       hostel_name,
       category,
       description,
       issue_photo: uploadedFile ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` : '',
-      expiresAt: Date.now() + 5 * 60 * 1000
+      expiresAt: Date.now() + 15 * 60 * 1000 // 15 Mins expiry
     });
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
       subject: '🔑 OTP for Hostel Complaint Submission',
-      text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 5 minutes.`
+      text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 15 minutes.`
     });
 
     return res.json({ 
@@ -6819,12 +6821,17 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     const pending = otpStore.get(tempId);
 
-    if (!pending || pending.expiresAt < Date.now()) {
-      return res.status(400).json({ error: "OTP expired or invalid" });
+    if (!pending) {
+      return res.status(400).json({ error: "OTP session not found or expired. Request a new OTP." });
     }
 
-    if (pending.otp !== String(userOtp).trim()) {
-      return res.status(400).json({ error: "Invalid OTP" });
+    if (pending.expiresAt < Date.now()) {
+      otpStore.delete(tempId);
+      return res.status(400).json({ error: "OTP expired. Please request a new one." });
+    }
+
+    if (String(pending.otp).trim() !== String(userOtp).trim()) {
+      return res.status(400).json({ error: "Invalid OTP. Please check your webmail." });
     }
 
     const insertQuery = `
@@ -6880,11 +6887,11 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
     const otp = generateOTP();
 
     otpStore.set(`caretaker_fix_${id}`, {
-      otp,
+      otp: String(otp).trim(),
       complaintId: id,
       action_type,
       fix_photo: uploadedFile ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` : '',
-      expiresAt: Date.now() + 5 * 60 * 1000
+      expiresAt: Date.now() + 15 * 60 * 1000
     });
 
     await transporter.sendMail({
@@ -6916,7 +6923,7 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
       return res.status(400).json({ error: "OTP expired or invalid" });
     }
 
-    if (pending.otp !== String(userOtp).trim()) {
+    if (String(pending.otp).trim() !== String(userOtp).trim()) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
@@ -6970,9 +6977,9 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
     const otp = generateOTP();
 
     otpStore.set(`student_confirm_${id}`, {
-      otp,
+      otp: String(otp).trim(),
       purpose,
-      expiresAt: Date.now() + 5 * 60 * 1000
+      expiresAt: Date.now() + 15 * 60 * 1000
     });
 
     await transporter.sendMail({
@@ -7004,7 +7011,7 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
       return res.status(400).json({ error: "OTP expired or invalid" });
     }
 
-    if (pending.otp !== String(userOtp).trim()) {
+    if (String(pending.otp).trim() !== String(userOtp).trim()) {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
@@ -7092,7 +7099,6 @@ app.get('/api/complaints', async (req, res) => {
   }
 });
 
-// Multer error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: "Image size too large. Maximum limit is 3.5 MB." });
