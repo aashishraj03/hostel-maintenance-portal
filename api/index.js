@@ -3010,36 +3010,21 @@
 // const PORT = process.env.PORT || 3000;
 // app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-
-require('dotenv').config();
 const express = require('express');
-const multer = require('multer');
-const { v2: cloudinary } = require('cloudinary');
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { Pool } = require('pg');
-const path = require('path');
 const nodemailer = require('nodemailer');
+const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 
-// 1. Cloudinary Setup (For Permanent Photo Storage)
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// --- Express Body Limits ---
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.static(path.join(__dirname, '../public')));
 
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'hostel_maintenance',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp']
-  }
-});
-const upload = multer({ storage });
-
-// 2. PostgreSQL Connection Pool
-// 2. PostgreSQL Connection Pool with serverless error handling
+// --- PostgreSQL Pool Setup (Serverless Friendly) ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -3049,33 +3034,38 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
+  console.error('Unexpected error on idle PostgreSQL client:', err.message || err);
 });
 
-// Database Init
-async function initDb() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS complaints (
-      id SERIAL PRIMARY KEY,
-      hostel_name TEXT NOT NULL,
-      kerberos_id TEXT NOT NULL,
-      category TEXT NOT NULL,
-      description TEXT NOT NULL,
-      issue_photo TEXT NOT NULL,
-      status TEXT DEFAULT 'Pending',
-      fix_photo TEXT DEFAULT NULL,
-      otp_code TEXT DEFAULT NULL,
-      caretaker_otp_code TEXT DEFAULT NULL,
-      rejection_count INTEGER DEFAULT 0,
-      last_rejection_reason TEXT DEFAULT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      resolved_at TIMESTAMP DEFAULT NULL
-    )
-  `);
-}
-initDb().catch(console.error);
+// --- Cloudinary Config ---
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-// Transporter
+// --- Multer Memory Storage (Required for Vercel) ---
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB image size limit
+});
+
+// Helper: Upload Buffer directly to Cloudinary
+const uploadToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: 'complaints' },
+      (error, result) => {
+        if (result) resolve(result.secure_url);
+        else reject(error);
+      }
+    );
+    stream.end(fileBuffer);
+  });
+};
+
+// --- Nodemailer Transporter ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -3085,20 +3075,15 @@ const transporter = nodemailer.createTransport({
 });
 
 function getCaretakerEmail(hostelName) {
-  return 'aashishraj0310@gmail.com'; // Replace with caretaker webmail when ready
+  return 'aashishraj0310@gmail.com'; // Replace with actual email mapping when ready
 }
 
 const pendingSubmissions = new Map();
 const pendingCaretakerFixes = new Map();
 
-// app.use(express.json());
-// app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-app.use(express.static(path.join(__dirname, '../public')));
-
 // --- API ENDPOINTS ---
 
+// GET Complaints
 app.get('/api/complaints', async (req, res) => {
   const { hostel } = req.query;
   try {
@@ -3110,172 +3095,77 @@ app.get('/api/complaints', async (req, res) => {
       query += ` WHERE hostel_name = $1`;
       params.push(hostel);
     }
-    query += ` ORDER BY CASE WHEN status = 'Pending' THEN 0 WHEN status LIKE 'Awaiting%' THEN 1 ELSE 2 END, created_at DESC`;
+    query += ` ORDER BY created_at DESC`;
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error fetching complaints:", err.message || err);
+    res.status(500).json({ error: err.message || 'Failed to fetch complaints' });
   }
 });
 
-app.post('/api/complaints/request-submission-otp', upload.single('issue_photo'), async (req, res) => {
+// POST Request Submission OTP
+app.post('/api/complaints/request-submission-otp', upload.single('photo'), async (req, res) => {
   try {
-    const { hostel_name, kerberos_id, category, description } = req.body;
-    if (!req.file) return res.status(400).json({ error: 'Issue photo required' });
+    const { hostel, kerberos, category, description } = req.body;
 
-    const cleanKerberos = kerberos_id.trim().toLowerCase().replace('@iitd.ac.in', '');
-    const studentEmail = `${cleanKerberos}@iitd.ac.in`;
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const tempId = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    if (!hostel || !kerberos || !category || !description) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
 
-    pendingSubmissions.set(tempId, {
-      hostel_name,
-      kerberos_id: cleanKerberos,
+    let photoUrl = null;
+    if (req.file) {
+      photoUrl = await uploadToCloudinary(req.file.buffer);
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const studentEmail = `${kerberos}@iitd.ac.in`;
+
+    pendingSubmissions.set(kerberos, {
+      otp,
+      hostel,
+      kerberos,
       category,
       description,
-      filename: req.file.path, // Cloudinary Permanent URL
-      otp: generatedOtp
+      photoUrl,
+      createdAt: Date.now()
     });
 
     await transporter.sendMail({
-      from: '"Campus Maintenance Portal" <no-reply@iitd.ac.in>',
+      from: process.env.EMAIL_USER,
       to: studentEmail,
-      subject: `OTP to Submit Maintenance Request - ${hostel_name}`,
-      html: `<h3>Your OTP is: ${generatedOtp}</h3>`
+      subject: 'OTP for Complaint Submission',
+      text: `Your OTP for submitting the complaint is: ${otp}`
     });
 
-    res.json({ success: true, tempId, emailSentTo: studentEmail });
+    res.json({ message: 'OTP sent to student email successfully' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("OTP Error Details:", err.message || err);
+    res.status(500).json({ error: err.message || 'Failed to send OTP' });
   }
 });
 
+// POST Verify Submission OTP
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
-    const { tempId, userOtp } = req.body;
-    const pendingData = pendingSubmissions.get(tempId);
+    const { kerberos, otp } = req.body;
+    const pending = pendingSubmissions.get(kerberos);
 
-    if (!pendingData || pendingData.otp !== userOtp.trim()) {
-      return res.status(400).json({ error: 'Invalid or expired OTP.' });
+    if (!pending || pending.otp !== otp) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    await pool.query(
-      `INSERT INTO complaints (hostel_name, kerberos_id, category, description, issue_photo) VALUES ($1, $2, $3, $4, $5)`,
-      [pendingData.hostel_name, pendingData.kerberos_id, pendingData.category, pendingData.description, pendingData.filename]
+    const result = await pool.query(
+      `INSERT INTO complaints (hostel_name, kerberos_id, category, description, photo_url, status)
+       VALUES ($1, $2, $3, $4, $5, 'OPEN') RETURNING *`,
+      [pending.hostel, pending.kerberos, pending.category, pending.description, pending.photoUrl]
     );
 
-    pendingSubmissions.delete(tempId);
-    res.json({ success: true });
+    pendingSubmissions.delete(kerberos);
+    res.json({ message: 'Complaint created successfully', complaint: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/complaints/request-caretaker-otp/:id', upload.single('fix_photo'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { action_type } = req.body;
-    if (!req.file) return res.status(400).json({ error: 'Proof photo required' });
-
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const caretakerEmail = getCaretakerEmail();
-
-    pendingCaretakerFixes.set(id.toString(), {
-      action_type: action_type || 'Repaired',
-      fix_photo: req.file.path,
-      otp: generatedOtp
-    });
-
-    await transporter.sendMail({
-      from: '"Campus Maintenance Portal" <no-reply@iitd.ac.in>',
-      to: caretakerEmail,
-      subject: `Caretaker OTP - Ticket #${id}`,
-      html: `<h3>Your Caretaker Fix OTP is: ${generatedOtp}</h3>`
-    });
-
-    res.json({ success: true, emailSentTo: caretakerEmail });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { userOtp } = req.body;
-    const pendingFix = pendingCaretakerFixes.get(id.toString());
-
-    if (!pendingFix || pendingFix.otp !== userOtp.trim()) {
-      return res.status(400).json({ error: 'Invalid Caretaker OTP.' });
-    }
-
-    const statusStr = `Awaiting Verification (${pendingFix.action_type})`;
-    await pool.query(
-      `UPDATE complaints SET status = $1, fix_photo = $2, resolved_at = CURRENT_TIMESTAMP WHERE id = $3`,
-      [statusStr, pendingFix.fix_photo, id]
-    );
-
-    pendingCaretakerFixes.delete(id.toString());
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/complaints/send-otp/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { purpose } = req.body;
-    
-    const result = await pool.query('SELECT kerberos_id, category, hostel_name FROM complaints WHERE id = $1', [id]);
-    const complaint = result.rows[0];
-
-    if (!complaint) return res.status(404).json({ error: 'Complaint not found' });
-
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
-
-    await pool.query('UPDATE complaints SET otp_code = $1 WHERE id = $2', [generatedOtp, id]);
-
-    await transporter.sendMail({
-      from: '"Hostel Maintenance Portal" <no-reply@iitd.ac.in>',
-      to: studentEmail,
-      subject: `OTP for ${purpose === 'reject' ? 'Rejection' : 'Verification'}`,
-      html: `<h3>Your OTP is: ${generatedOtp}</h3>`
-    });
-
-    res.json({ success: true, emailSentTo: studentEmail });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/complaints/verify-otp/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { userOtp, approved, rejection_reason } = req.body;
-
-    const result = await pool.query('SELECT otp_code FROM complaints WHERE id = $1', [id]);
-    const complaint = result.rows[0];
-
-    if (!complaint || complaint.otp_code !== userOtp.trim()) {
-      return res.status(400).json({ error: 'Invalid OTP entered.' });
-    }
-
-    if (!approved) {
-      const reasonText = rejection_reason ? rejection_reason.trim() : 'No reason provided';
-      await pool.query(
-        `UPDATE complaints SET status = 'Pending', fix_photo = NULL, resolved_at = NULL, otp_code = NULL,
-         rejection_count = COALESCE(rejection_count, 0) + 1, last_rejection_reason = $1 WHERE id = $2`,
-        [reasonText, id]
-      );
-      return res.json({ success: true, status: 'Reopened' });
-    }
-
-    await pool.query("UPDATE complaints SET status = 'Resolved (Verified)', otp_code = NULL WHERE id = $1", [id]);
-    res.json({ success: true, status: 'Resolved' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Verification Error:", err.message || err);
+    res.status(500).json({ error: err.message || 'Failed to verify OTP' });
   }
 });
 
