@@ -6324,7 +6324,7 @@ import pg from 'pg';
 const app = express();
 const { Pool } = pg;
 
-// Built-in CORS headers (Zero external dependencies)
+// Built-in CORS headers
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -6344,14 +6344,14 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// --- Multer Configuration (3.5MB Limit) ---
+// --- Multer Configuration ---
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
   limits: { fileSize: 3.5 * 1024 * 1024 }
 });
 
-// --- Nodemailer Transporter (Gmail OAuth2 over Port 443) ---
+// --- Nodemailer Transporter (Gmail OAuth2) ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -6363,17 +6363,14 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Helper: Caretaker Email Mapping
 function getCaretakerEmail(hostel) {
   return process.env.CARETAKER_EMAIL || process.env.EMAIL_USER;
 }
 
-// Helper: Generate 6-digit OTP
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// In-Memory OTP Store
 const otpStore = new Map();
 
 // =================================================================
@@ -6445,8 +6442,8 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
     }
 
     const insertQuery = `
-      INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, 'Pending', NOW(), NOW())
+      INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, 'Pending', NOW())
       RETURNING *;
     `;
     const result = await pool.query(insertQuery, [
@@ -6459,7 +6456,6 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     otpStore.delete(tempId);
 
-    // Notify Caretaker
     try {
       const caretakerEmail = getCaretakerEmail(pending.hostel_name);
       await transporter.sendMail({
@@ -6494,7 +6490,7 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
     }
 
     const complaint = complaintRes.rows[0];
-    const caretakerEmail = getCaretakerEmail(complaint.hostel_name || complaint.hostel);
+    const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
     const otp = generateOTP();
 
     otpStore.set(`caretaker_fix_${id}`, {
@@ -6509,7 +6505,7 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
       from: process.env.EMAIL_USER,
       to: caretakerEmail,
       subject: `🔑 OTP to Verify Fix for Issue #${id}`,
-      text: `Your OTP to submit resolution proof for Issue #${id} (${complaint.hostel_name || complaint.hostel}) is: ${otp}`
+      text: `Your OTP to submit resolution proof for Issue #${id} (${complaint.hostel_name}) is: ${otp}`
     });
 
     return res.json({ success: true, emailSentTo: caretakerEmail });
@@ -6540,7 +6536,7 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     const updateQuery = `
       UPDATE complaints 
-      SET status = 'Awaiting Verification', fix_photo = $1, updated_at = NOW() 
+      SET status = 'Awaiting Verification', fix_photo = $1
       WHERE id = $2 
       RETURNING *;
     `;
@@ -6549,7 +6545,6 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     const complaint = updateResult.rows[0];
 
-    // Notify Student
     if (complaint && complaint.kerberos_id) {
       try {
         const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
@@ -6631,15 +6626,14 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
     let queryParams = [];
 
     if (approved) {
-      updateQuery = `UPDATE complaints SET status = 'Resolved', updated_at = NOW() WHERE id = $1 RETURNING *;`;
+      updateQuery = `UPDATE complaints SET status = 'Resolved' WHERE id = $1 RETURNING *;`;
       queryParams = [id];
     } else {
       updateQuery = `
         UPDATE complaints 
         SET status = 'Pending', 
             rejection_count = COALESCE(rejection_count, 0) + 1, 
-            last_rejection_reason = $1, 
-            updated_at = NOW() 
+            last_rejection_reason = $1 
         WHERE id = $2 
         RETURNING *;
       `;
@@ -6657,7 +6651,7 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
 });
 
 // =================================================================
-// 7. GET COMPLAINTS (WITH HOSTEL FILTER & DB COLUMN FALLBACKS)
+// 7. GET COMPLAINTS
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
@@ -6667,7 +6661,7 @@ app.get('/api/complaints', async (req, res) => {
       SELECT 
         id,
         kerberos_id,
-        COALESCE(hostel_name, hostel) AS hostel_name,
+        hostel_name,
         category,
         description,
         COALESCE(issue_photo, '') AS issue_photo,
@@ -6676,13 +6670,13 @@ app.get('/api/complaints', async (req, res) => {
         COALESCE(rejection_count, 0) AS rejection_count,
         last_rejection_reason,
         created_at,
-        EXTRACT(EPOCH FROM (NOW() - COALESCE(updated_at, created_at)))/3600 AS hours_since_fix 
+        EXTRACT(EPOCH FROM (NOW() - created_at))/3600 AS hours_since_fix 
       FROM complaints
     `;
     let queryParams = [];
 
     if (hostel && hostel !== 'ALL') {
-      query += ' WHERE (hostel_name = $1 OR hostel = $1)';
+      query += ' WHERE hostel_name = $1';
       queryParams.push(hostel);
     }
 
