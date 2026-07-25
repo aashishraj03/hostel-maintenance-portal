@@ -6750,7 +6750,7 @@ const transporter = nodemailer.createTransport({
 
 // Helper: Caretaker Email Mapping
 function getCaretakerEmail(hostel) {
-  return process.env.CARETAKER_EMAIL || process.env.EMAIL_USER;
+  return process.env.CARETAKER_EMAIL || "aashishraj0310@gmail.com";
 }
 
 // Helper: Generate 6-digit OTP
