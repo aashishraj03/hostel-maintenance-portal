@@ -3363,6 +3363,8 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       message: 'OTP sent successfully',
       email: studentEmail,
       studentEmail: studentEmail,
+      recipient: studentEmail,
+      to: studentEmail,
       kerberos: cleanKerberos
     });
   } catch (err) {
@@ -3371,15 +3373,19 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
   }
 });
 
-// POST Verify Submission OTP
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
-    const { kerberos, otp } = req.body;
-    const cleanKerberos = kerberos ? kerberos.trim().toLowerCase() : '';
+    const kerberos = req.body.kerberos || req.body.kerberos_id || req.body.username;
+    const otp = req.body.otp || req.body.code || req.body.otpCode;
+
+    const cleanKerberos = kerberos ? kerberos.toString().trim().toLowerCase() : '';
     const cleanOtp = otp ? otp.toString().trim() : '';
 
     if (!cleanKerberos || !cleanOtp) {
-      return res.status(400).json({ error: 'Kerberos and OTP are required' });
+      return res.status(400).json({ 
+        error: 'Kerberos and OTP are required', 
+        received: req.body 
+      });
     }
 
     // Fetch pending submission from DB
