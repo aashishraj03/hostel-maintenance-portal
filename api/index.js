@@ -5151,9 +5151,8 @@ const app = express();
 // --- Express Body Limits ---
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
-app.use(express.static(path.join(__dirname, '../public')));
 
-// --- PostgreSQL Connection Pool ---
+// --- PostgreSQL Pool Setup (Serverless Safe) ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -5162,11 +5161,13 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle PostgreSQL client:', err.message || err);
+  console.error('Idle PostgreSQL pool error:', err.message || err);
 });
 
-// Helper: Ensure database tables & required columns exist
-const initDb = async () => {
+// Helper: Ensure DB tables exist without crashing top-level runtime
+let dbInitialized = false;
+const ensureDb = async () => {
+  if (dbInitialized) return;
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS pending_otps (
@@ -5207,12 +5208,17 @@ const initDb = async () => {
       ALTER TABLE complaints ADD COLUMN IF NOT EXISTS last_rejection_reason TEXT;
     `);
 
-    console.log("Database initialized successfully!");
+    dbInitialized = true;
   } catch (err) {
-    console.error("Failed to initialize database:", err.message || err);
+    console.error("Database setup warning:", err.message || err);
   }
 };
-initDb();
+
+// Safe DB Middleware
+app.use(async (req, res, next) => {
+  await ensureDb();
+  next();
+});
 
 // --- Cloudinary Config ---
 cloudinary.config({
@@ -5283,9 +5289,7 @@ app.get('/api/complaints', async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------
 // 1️⃣ STUDENT COMPLAINT SUBMISSION OTP ENDPOINTS
-// -----------------------------------------------------------------
 app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
     const hostel = req.body.hostel_name || req.body.hostel;
@@ -5316,7 +5320,6 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       [cleanKerberos, otp, hostel, category, description, photoUrl]
     );
 
-    // Send OTP email to student
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -5377,7 +5380,6 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
 
-    // Insert complaint into Database
     const result = await pool.query(
       `INSERT INTO complaints (hostel_name, kerberos_id, category, description, issue_photo, status)
        VALUES ($1, $2, $3, $4, $5, 'Pending') RETURNING *`,
@@ -5386,7 +5388,6 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     await pool.query(`DELETE FROM pending_otps WHERE kerberos = $1`, [cleanKerberos]);
 
-    // Send notification email to Caretaker AFTER complaint is created
     const caretakerEmail = getCaretakerEmail(pending.hostel);
     transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -5402,9 +5403,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------
 // 2️⃣ CARETAKER FIX SUBMISSION OTP ENDPOINTS
-// -----------------------------------------------------------------
 app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, res) => {
   try {
     const { id } = req.params;
@@ -5425,16 +5424,6 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
 
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS caretaker_otps (
-        complaint_id INT PRIMARY KEY,
-        otp VARCHAR(10) NOT NULL,
-        action_type VARCHAR(50),
-        fix_photo TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
     await pool.query(
       `INSERT INTO caretaker_otps (complaint_id, otp, action_type, fix_photo)
        VALUES ($1, $2, $3, $4)
@@ -5444,7 +5433,6 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
       [id, otp, action_type, fixPhotoUrl]
     );
 
-    // Send Caretaker OTP email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: caretakerEmail,
@@ -5485,7 +5473,6 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     const caretakerData = otpResult.rows[0];
 
-    // Update status in Database
     const updated = await pool.query(
       `UPDATE complaints 
        SET status = 'Awaiting Student Verification', 
@@ -5500,7 +5487,6 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
     const complaint = updated.rows[0];
     const studentEmail = `${complaint.kerberos_id.trim().toLowerCase()}@iitd.ac.in`;
 
-    // Send notification email to Student AFTER caretaker marks fixed
     transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -5519,22 +5505,11 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
   }
 });
 
-// -----------------------------------------------------------------
 // 3️⃣ STUDENT FIX VERIFICATION / REJECTION OTP ENDPOINTS
-// -----------------------------------------------------------------
 app.post('/api/complaints/send-otp/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { purpose } = req.body;
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS student_action_otps (
-        complaint_id INT PRIMARY KEY,
-        otp VARCHAR(10) NOT NULL,
-        purpose VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
 
     const complaintRes = await pool.query(`SELECT * FROM complaints WHERE id = $1`, [id]);
     if (complaintRes.rows.length === 0) {
@@ -5553,7 +5528,6 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
       [id, otp, purpose || 'verify']
     );
 
-    // Send Student Action OTP email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: studentEmail,
@@ -5605,11 +5579,6 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
       );
       updatedComplaint = resQuery.rows[0];
     } else {
-      await pool.query(`
-        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS rejection_count INT DEFAULT 0;
-        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS last_rejection_reason TEXT;
-      `);
-
       const resQuery = await pool.query(
         `UPDATE complaints 
          SET status = 'Pending', 
@@ -5620,7 +5589,6 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
       );
       updatedComplaint = resQuery.rows[0];
 
-      // Send notification email to Caretaker AFTER student rejects fix
       const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
       transporter.sendMail({
         from: process.env.EMAIL_USER,
