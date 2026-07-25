@@ -6796,7 +6796,7 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: studentEmail,
       subject: '🔑 OTP for Hostel Complaint Submission',
       text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 5 minutes.`
@@ -6900,7 +6900,7 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: caretakerEmail,
       subject: `🔑 OTP to Verify Fix for Issue #${id}`,
       text: `Your OTP to submit resolution proof for Issue #${id} (${complaint.hostel_name}) is: ${otp}`
@@ -6948,7 +6948,7 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
       try {
         const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
         await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+          from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
           to: studentEmail,
           subject: `🔧 Maintenance Issue #${id} Fixed - Verification Required`,
           text: `The caretaker has uploaded proof of fix for your complaint (#${id}). Please log into the portal to verify and confirm resolution.`
@@ -6989,7 +6989,7 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: studentEmail,
       subject: `🔑 OTP to ${purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix'} for Issue #${id}`,
       text: `Your OTP to ${purpose === 'verify' ? 'confirm resolution' : 'reject resolution'} for Issue #${id} is: ${otp}`
@@ -7050,7 +7050,7 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
       try {
         const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
         await transporter.sendMail({
-          from: process.env.EMAIL_USER,
+          from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
           to: caretakerEmail,
           subject: `⚠️ Issue #${id} Fix Rejected by Student (${updatedComplaint.hostel_name})`,
           text: `The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has REJECTED the fix for Issue #${id}.\n\nReason: "${rejection_reason || 'No specific reason given.'}"\n\nThe issue status has been reopened to 'Pending'.`
