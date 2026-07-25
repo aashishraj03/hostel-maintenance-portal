@@ -6710,7 +6710,7 @@ import pg from 'pg';
 const app = express();
 const { Pool } = pg;
 
-// Native CORS headers
+// Built-in CORS headers
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -6737,7 +6737,7 @@ const upload = multer({
   limits: { fileSize: 3.5 * 1024 * 1024 }
 });
 
-// --- Nodemailer Transporter (Gmail OAuth2 over HTTPS) ---
+// --- Nodemailer Transporter (Gmail OAuth2) ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -6784,8 +6784,7 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       hostel_name,
       category,
       description,
-      issue_photo_buffer: uploadedFile ? uploadedFile.buffer : null,
-      issue_photo_mime: uploadedFile ? uploadedFile.mimetype : 'image/png',
+      issue_photo: uploadedFile ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` : '',
       expiresAt: Date.now() + 5 * 60 * 1000
     });
 
@@ -6828,11 +6827,6 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
-    let photoBase64 = '';
-    if (pending.issue_photo_buffer) {
-      photoBase64 = `data:${pending.issue_photo_mime};base64,${pending.issue_photo_buffer.toString('base64')}`;
-    }
-
     const insertQuery = `
       INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
       VALUES ($1, $2, $3, $4, $5, 'Pending', NOW())
@@ -6843,12 +6837,11 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
       pending.hostel_name,
       pending.category,
       pending.description,
-      photoBase64
+      pending.issue_photo || ''
     ]);
 
     otpStore.delete(tempId);
 
-    // Notify Caretaker
     try {
       const caretakerEmail = getCaretakerEmail(pending.hostel_name);
       await transporter.sendMail({
@@ -6886,16 +6879,11 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
     const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
     const otp = generateOTP();
 
-    let fixBase64 = '';
-    if (uploadedFile) {
-      fixBase64 = `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}`;
-    }
-
     otpStore.set(`caretaker_fix_${id}`, {
       otp,
       complaintId: id,
       action_type,
-      fix_photo: fixBase64,
+      fix_photo: uploadedFile ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` : '',
       expiresAt: Date.now() + 5 * 60 * 1000
     });
 
@@ -6943,7 +6931,6 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     const complaint = updateResult.rows[0];
 
-    // Notify Student
     if (complaint && complaint.kerberos_id) {
       try {
         const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
@@ -7003,7 +6990,7 @@ app.post('/api/complaints/send-otp/:id', async (req, res) => {
 });
 
 // =================================================================
-// 6. STUDENT VERIFICATION / REJECTION: VERIFY OTP (CARETAKER NOTIFIED ON REJECTION)
+// 6. STUDENT VERIFICATION / REJECTION: VERIFY OTP
 // =================================================================
 app.post('/api/complaints/verify-otp/:id', async (req, res) => {
   try {
@@ -7044,7 +7031,7 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
 
     const updatedComplaint = updateResult.rows[0];
 
-    // SEND REJECTION NOTIFICATION TO CARETAKER
+    // NOTIFY CARETAKER IF FIX IS REJECTED
     if (!approved && updatedComplaint) {
       try {
         const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
@@ -7067,43 +7054,11 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
 });
 
 // =================================================================
-// 7. DYNAMIC IMAGE ROUTE (Allows .startsWith('http') check to pass)
-// =================================================================
-app.get('/api/photos/:id/:type', async (req, res) => {
-  try {
-    const { id, type } = req.params;
-    const result = await pool.query('SELECT issue_photo, fix_photo FROM complaints WHERE id = $1', [id]);
-    
-    if (result.rows.length === 0) return res.status(404).send('Not found');
-
-    const photoData = type === 'fix' ? result.rows[0].fix_photo : result.rows[0].issue_photo;
-    if (!photoData) return res.status(404).send('No photo');
-
-    if (photoData.startsWith('data:')) {
-      const matches = photoData.match(/^data:(.+);base64,(.+)$/);
-      if (matches) {
-        const contentType = matches[1];
-        const buffer = Buffer.from(matches[2], 'base64');
-        res.setHeader('Content-Type', contentType);
-        return res.send(buffer);
-      }
-    }
-    
-    return res.status(404).send('Invalid photo string');
-  } catch (err) {
-    console.error("Error serving photo:", err);
-    return res.status(500).send('Error serving photo');
-  }
-});
-
-// =================================================================
-// 8. GET COMPLAINTS (SERVES FULL HTTPS IMAGE URLS)
+// 7. GET COMPLAINTS (DIRECT BASE64 RETURN - NO EXTRA ENDPOINTS)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
     const { hostel } = req.query;
-    const host = req.get('host');
-    const protocol = req.headers['x-forwarded-proto'] || 'https';
 
     let query = `
       SELECT 
@@ -7112,8 +7067,8 @@ app.get('/api/complaints', async (req, res) => {
         hostel_name,
         category,
         description,
-        COALESCE(issue_photo, '') AS raw_issue_photo,
-        COALESCE(fix_photo, '') AS raw_fix_photo,
+        COALESCE(issue_photo, '') AS issue_photo,
+        COALESCE(fix_photo, '') AS fix_photo,
         COALESCE(status, 'Pending') AS status,
         COALESCE(rejection_count, 0) AS rejection_count,
         last_rejection_reason,
@@ -7131,20 +7086,14 @@ app.get('/api/complaints', async (req, res) => {
     query += ' ORDER BY created_at DESC;';
 
     const result = await pool.query(query, queryParams);
-
-    const formattedRows = result.rows.map(row => ({
-      ...row,
-      issue_photo: row.raw_issue_photo ? `${protocol}://${host}/api/photos/${row.id}/issue` : '',
-      fix_photo: row.raw_fix_photo ? `${protocol}://${host}/api/photos/${row.id}/fix` : ''
-    }));
-
-    return res.json(formattedRows);
+    return res.json(result.rows);
   } catch (err) {
     console.error("Error fetching complaints:", err);
     return res.status(500).json({ error: "Failed to fetch complaints" });
   }
 });
 
+// Multer error handling middleware
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
     return res.status(400).json({ error: "Image size too large. Maximum limit is 3.5 MB." });
