@@ -3485,6 +3485,11 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    await pool.query(`
+      ALTER TABLE complaints ADD COLUMN IF NOT EXISTS issue_photo TEXT;
+    `);
+    
     console.log("Database initialized successfully!");
   } catch (err) {
     console.error("Failed to initialize pending_otps table:", err.message || err);
@@ -3661,7 +3666,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 
     // Insert new complaint into complaints table
     const result = await pool.query(
-      `INSERT INTO complaints (hostel_name, kerberos_id, category, description, photo_url, status)
+      `INSERT INTO complaints (hostel_name, kerberos_id, category, description, issue_photo, status)
        VALUES ($1, $2, $3, $4, $5, 'Pending') RETURNING *`,
       [pending.hostel, pending.kerberos, pending.category, pending.description, pending.photo_url]
     );
