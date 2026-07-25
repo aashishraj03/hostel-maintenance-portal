@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Maintenance Portal</title>
+  <style>
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: #f4f6f8; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 1050px; margin: 0 auto; }
+    h1 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+    
+    .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input, select, textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; }
+    
+    .role-bar { display: flex; background: #e2e8f0; border-radius: 8px; padding: 4px; margin-bottom: 20px; }
+    .role-btn { flex: 1; padding: 10px; text-align: center; font-weight: bold; cursor: pointer; border-radius: 6px; border: none; background: transparent; color: #475569; }
+    .role-btn.active { background: #2c3e50; color: white; }
+
+    .filter-bar { background: #2c3e50; color: white; padding: 15px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+    .filter-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .filter-controls input, .filter-controls select { width: auto; background: white; color: #333; font-weight: bold; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    
+    .complaint-card { background: white; padding: 15px; border-radius: 8px; border-left: 6px solid #e74c3c; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .complaint-card.verifying { border-left-color: #f39c12; }
+    .complaint-card.resolved { border-left-color: #27ae60; opacity: 0.85; }
+    
+    .hostel-tag { display: inline-block; background: #e2e8f0; color: #334155; font-size: 0.75em; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-right: 5px; }
+    .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; color: white; background: #e74c3c; }
+    .status-badge.verifying { background: #f39c12; }
+    .status-badge.resolved { background: #27ae60; }
+
+    .rejection-badge { display: inline-block; background: #fee2e2; color: #991b1b; border: 1px solid #f87171; font-size: 0.75em; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-left: 5px; }
+    .rejection-box { background: #fff5f5; border: 1px solid #feb2b2; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 0.88em; color: #9b2c2c; }
+
+    .img-preview { display: flex; gap: 10px; margin: 12px 0; }
+    .img-box { flex: 1; text-align: center; }
+    .img-box img { width: 100%; height: 140px; object-fit: cover; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: transform 0.2s; }
+    .img-box img:hover { transform: scale(1.02); filter: brightness(0.9); }
+    .img-box span { font-size: 0.75em; color: #666; font-weight: bold; display: block; margin-bottom: 4px; }
+    
+    .action-box { background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; border: 1px dashed #ccc; }
+    .verify-box { background: #fff8e1; border: 1px solid #ffe082; padding: 12px; border-radius: 6px; margin-top: 10px; }
+    
+    button { background: #27ae60; color: white; border: none; padding: 9px 14px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+    button:hover { background: #219150; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-danger { background: #e74c3c; }
+    .btn-danger:hover { background: #c0392b; }
+
+    .lightbox { display: none; position: fixed; z-index: 9999; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); justify-content: center; align-items: center; cursor: zoom-out; }
+    .lightbox img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Campus Maintenance Portal</h1>
+
+  <!-- Mode Switcher -->
+  <div class="role-bar">
+    <button class="role-btn active" id="studentTabBtn" onclick="switchRole('student')">Student Portal</button>
+    <button class="role-btn" id="caretakerTabBtn" onclick="switchRole('caretaker')">Caretaker / Warden Portal</button>
+  </div>
+
+  <!-- Student Report Form with Two-Step OTP Verification -->
+  <div class="card" id="studentFormCard">
+    <h2>Report an Issue (Student)</h2>
+    <form id="complaintForm" onsubmit="initiateSubmissionOtp(event)">
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div class="form-group" style="flex: 1; min-width: 180px;">
+          <label>Select Hostel</label>
+          <select id="sub_hostel" name="hostel_name" required>
+            <option value="" disabled selected>-- Select Your Hostel --</option>
+            <option value="Aravali">Aravali</option>
+            <option value="Dronagiri">Dronagiri</option>
+            <option value="Girnar">Girnar</option>
+            <option value="Himadri">Himadri</option>
+            <option value="Jwala">Jwala</option>
+            <option value="Kailash">Kailash</option>
+            <option value="Karakoram">Karakoram</option>
+            <option value="Kumaon">Kumaon</option>
+            <option value="Nilgiri">Nilgiri</option>
+            <option value="Sahyadri">Sahyadri</option>
+            <option value="Saptagiri">Saptagiri</option>
+            <option value="Satpura">Satpura</option>
+            <option value="Shivalik">Shivalik</option>
+            <option value="Udaigiri">Udaigiri</option>
+            <option value="Vindhyachal">Vindhyachal</option>
+            <option value="Zanskar">Zanskar</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex: 1; min-width: 180px;">
+          <label>Kerberos ID</label>
+          <input type="text" id="sub_kerberos" name="kerberos_id" placeholder="e.g. ce1230456" required>
+        </div>
+        <div class="form-group" style="flex: 1; min-width: 150px;">
+          <label>Category</label>
+          <select id="sub_category" name="category" required>
+            <option value="Plumbing">Plumbing</option>
+            <option value="Electrical">Electrical</option>
+            <option value="Furniture">Furniture</option>
+            <option value="Appliance">Appliance</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description of Issue</label>
+        <textarea id="sub_description" name="description" rows="2" placeholder="Describe the maintenance problem..." required></textarea>
+      </div>
+      <div class="form-group">
+        <label>Upload Photo of Issue</label>
+        <input type="file" id="sub_photo" name="issue_photo" accept="image/*" required>
+      </div>
+
+      <!-- Step 1 Button -->
+      <div id="submitStep1">
+        <button type="submit" id="requestSubOtpBtn">Send OTP to Submit Complaint</button>
+      </div>
+
+      <!-- Step 2 Input -->
+      <div id="submitStep2" style="display:none; margin-top:10px; background:#e8f5e9; padding:15px; border-radius:6px; border:1px solid #c8e6c9;">
+        <label style="color:#2e7d32;">Enter 6-Digit OTP sent to your Kerberos Email:</label>
+        <input type="text" id="sub_otp_input" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
+        <div style="display:flex; gap:10px;">
+          <button type="button" onclick="confirmSubmissionOtp()" style="flex:1;">Verify OTP & Post Complaint</button>
+          <button type="button" onclick="resetSubmissionForm()" style="background:#7f8c8d; flex:1;">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <div>
+      <h3 style="margin: 0;" id="dashboardTitle">Student Feed</h3>
+      <small style="color: #cbd5e1;">Search or filter by hostel</small>
+    </div>
+    <div class="filter-controls">
+      <input type="text" id="hostelSearch" placeholder="🔍 Type hostel name..." oninput="filterBySearch()" style="padding: 8px 12px;">
+      
+      <select id="hostelFilter" onchange="syncSearchAndLoad()">
+        <option value="ALL">All Hostels</option>
+        <option value="Aravali">Aravali</option>
+        <option value="Dronagiri">Dronagiri</option>
+        <option value="Girnar">Girnar</option>
+        <option value="Himadri">Himadri</option>
+        <option value="Jwala">Jwala</option>
+        <option value="Kailash">Kailash</option>
+        <option value="Karakoram">Karakoram</option>
+        <option value="Kumaon">Kumaon</option>
+        <option value="Nilgiri">Nilgiri</option>
+        <option value="Sahyadri">Sahyadri</option>
+        <option value="Saptagiri">Saptagiri</option>
+        <option value="Satpura">Satpura</option>
+        <option value="Shivalik">Shivalik</option>
+        <option value="Udaigiri">Udaigiri</option>
+        <option value="Vindhyachal">Vindhyachal</option>
+        <option value="Zanskar">Zanskar</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Complaints Grid Feed -->
+  <div class="grid" id="complaintsList"></div>
+</div>
+
+<!-- Lightbox Modal -->
+<div id="lightbox" class="lightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="Enlarged View">
+</div>
+
+<script>
+  let currentRole = 'student';
+  let activeSubmissionTempId = null;
+
+  function switchRole(role) {
+    currentRole = role;
+    document.getElementById('studentTabBtn').classList.toggle('active', role === 'student');
+    document.getElementById('caretakerTabBtn').classList.toggle('active', role === 'caretaker');
+    document.getElementById('studentFormCard').style.display = (role === 'student') ? 'block' : 'none';
+    document.getElementById('dashboardTitle').innerText = (role === 'student') ? 'Student Feed' : 'Caretaker Action Dashboard';
+    loadComplaints();
+  }
+
+  function openLightbox(src) {
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightbox').style.display = 'flex';
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').style.display = 'none';
+  }
+
+  function syncSearchAndLoad() {
+    document.getElementById('hostelSearch').value = '';
+    loadComplaints();
+  }
+
+  function filterBySearch() {
+    const searchText = document.getElementById('hostelSearch').value.toLowerCase();
+    const select = document.getElementById('hostelFilter');
+    
+    let matched = false;
+    for (let i = 0; i < select.options.length; i++) {
+      if (select.options[i].value.toLowerCase() === searchText) {
+        select.selectedIndex = i;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched && searchText !== '') select.value = 'ALL';
+    loadComplaints(searchText);
+  }
+
+  // --- STUDENT SUBMISSION OTP ---
+  async function initiateSubmissionOtp(event) {
+    event.preventDefault();
+    const btn = document.getElementById('requestSubOtpBtn');
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP... Please wait';
+
+    const formData = new FormData(document.getElementById('complaintForm'));
+
+    try {
+      const res = await fetch('/api/complaints/request-submission-otp', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        activeSubmissionTempId = data.tempId;
+        alert(`An OTP has been sent to ${data.emailSentTo}. Please check your email!`);
+        document.getElementById('submitStep1').style.display = 'none';
+        document.getElementById('submitStep2').style.display = 'block';
+      } else {
+        alert(data.error || 'Failed to request OTP.');
+        resetSubmissionFormBtn(btn);
+      }
+    } catch (err) {
+      alert('Network error while requesting OTP.');
+      resetSubmissionFormBtn(btn);
+    }
+  }
+
+  function resetSubmissionFormBtn(btn) {
+    btn.disabled = false;
+    btn.innerText = 'Send OTP to Submit Complaint';
+  }
+
+  async function confirmSubmissionOtp() {
+    const userOtp = document.getElementById('sub_otp_input').value;
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch('/api/complaints/verify-submission-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tempId: activeSubmissionTempId, userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert('Complaint verified and posted successfully! Caretaker has been notified.');
+      resetSubmissionForm();
+      loadComplaints();
+    } else {
+      alert(data.error || 'Verification failed.');
+    }
+  }
+
+  function resetSubmissionForm() {
+    document.getElementById('complaintForm').reset();
+    document.getElementById('submitStep1').style.display = 'block';
+    document.getElementById('submitStep2').style.display = 'none';
+    const btn = document.getElementById('requestSubOtpBtn');
+    resetSubmissionFormBtn(btn);
+    activeSubmissionTempId = null;
+  }
+
+  // --- CARETAKER FIX SUBMISSION OTP ---
+  async function requestCaretakerFixOtp(event, id) {
+    event.preventDefault();
+    const btn = document.getElementById(`caretaker-sub-btn-${id}`);
+    const fileInput = document.getElementById(`fix_photo-${id}`);
+    const action_type = document.getElementById(`action_type-${id}`).value;
+
+    if (!fileInput.files[0]) {
+      alert('Please select a proof photo.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP... Please wait';
+
+    const formData = new FormData();
+    formData.append('action_type', action_type);
+    formData.append('fix_photo', fileInput.files[0]);
+
+    try {
+      const res = await fetch(`/api/complaints/request-caretaker-otp/${id}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`An OTP has been sent to Caretaker Webmail (${data.emailSentTo})!`);
+        document.getElementById(`caretaker-step-1-${id}`).style.display = 'none';
+        document.getElementById(`caretaker-step-2-${id}`).style.display = 'block';
+      } else {
+        alert(data.error || 'Failed to request Caretaker OTP.');
+        btn.disabled = false;
+        btn.innerText = 'Send OTP to Verify & Submit Fix';
+      }
+    } catch (err) {
+      alert('Network error while requesting Caretaker OTP.');
+      btn.disabled = false;
+      btn.innerText = 'Send OTP to Verify & Submit Fix';
+    }
+  }
+
+  async function confirmCaretakerFixOtp(id) {
+    const userOtp = document.getElementById(`caretaker_otp_input-${id}`).value;
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch(`/api/complaints/verify-caretaker-otp/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert('Caretaker fix verified and submitted for student confirmation!');
+      loadComplaints();
+    } else {
+      alert(data.error || 'Verification failed.');
+    }
+  }
+
+  async function loadComplaints(searchQuery = '') {
+    const selectedHostel = document.getElementById('hostelFilter').value;
+    const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(selectedHostel)}`);
+    let data = await res.json();
+
+    if (searchQuery && selectedHostel === 'ALL') {
+      data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));
+    }
+    
+    const container = document.getElementById('complaintsList');
+    container.innerHTML = '';
+
+    if (data.length === 0) {
+      container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 8px; color: #777;">No complaints found.</div>`;
+      return;
+    }
+
+    data.forEach(item => {
+      const isPending = item.status === 'Pending';
+      const isVerifying = item.status.startsWith('Awaiting');
+      const isResolved = item.status.startsWith('Resolved');
+
+      let cardClass = 'complaint-card';
+      if (isVerifying) cardClass += ' verifying';
+      if (isResolved) cardClass += ' resolved';
+
+      let badgeClass = 'status-badge';
+      if (isVerifying) badgeClass += ' verifying';
+      if (isResolved) badgeClass += ' resolved';
+
+      const issuePhotoSrc = item.issue_photo.startsWith('http') ? item.issue_photo : `/uploads/issues/${item.issue_photo}`;
+      const fixPhotoSrc = item.fix_photo ? (item.fix_photo.startsWith('http') ? item.fix_photo : `/uploads/fixes/${item.fix_photo}`) : null;
+
+      let fixImageHtml = '';
+      if (fixPhotoSrc) {
+        fixImageHtml = `
+          <div class="img-box">
+            <span>Proof of Fix</span>
+            <img src="${fixPhotoSrc}" onclick="openLightbox('${fixPhotoSrc}')" alt="Fix Photo">
+          </div>
+        `;
+      }
+
+      let rejectionHtml = '';
+      if (item.rejection_count > 0) {
+        rejectionHtml = `
+          <div class="rejection-box">
+            <strong>⚠️ Rejected ${item.rejection_count} time(s):</strong> "${item.last_rejection_reason || 'No specific reason given.'}"
+          </div>
+        `;
+      }
+
+      let actionAreaHtml = '';
+
+      if (currentRole === 'caretaker') {
+        if (isPending) {
+          actionAreaHtml = `
+            <div class="action-box">
+              <h4 style="margin: 0 0 8px 0;">Caretaker Fix Action</h4>
+              
+              <div id="caretaker-step-1-${item.id}">
+                <form onsubmit="requestCaretakerFixOtp(event, ${item.id})">
+                  <div class="form-group">
+                    <label>Resolution Action</label>
+                    <select id="action_type-${item.id}">
+                      <option value="Repaired">Repaired</option>
+                      <option value="Replaced">Replaced</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Upload Proof Photo</label>
+                    <input type="file" id="fix_photo-${item.id}" accept="image/*" required>
+                  </div>
+                  <button type="submit" id="caretaker-sub-btn-${item.id}" style="width:100%; background: #2980b9;">Send OTP to Verify & Submit Fix</button>
+                </form>
+              </div>
+
+              <div id="caretaker-step-2-${item.id}" style="display:none; margin-top:10px; background:#e1f5fe; padding:12px; border-radius:6px; border:1px solid #b3e5fc;">
+                <label style="color:#0277bd; font-size:0.85em;">Enter OTP sent to Caretaker Webmail (aashishraj0310@gmail.com):</label>
+                <input type="text" id="caretaker_otp_input-${item.id}" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
+                <button onclick="confirmCaretakerFixOtp(${item.id})" style="width:100%; background:#0288d1;">Verify OTP & Mark Fixed</button>
+              </div>
+
+            </div>
+          `;
+        } else if (isVerifying) {
+          actionAreaHtml = `<div style="font-size:0.85em; color:#d35400; font-weight:bold; margin-top:10px; background:#fff8e1; padding:8px; border-radius:4px; text-align:center;">⌛ Awaiting Student OTP Verification</div>`;
+        }
+      } 
+      else if (currentRole === 'student') {
+        if (isVerifying) {
+          const hoursLeft = Math.max(0, (24 - (item.hours_since_fix || 0))).toFixed(1);
+          actionAreaHtml = `
+            <div class="verify-box" id="verify-box-${item.id}">
+              <h4 style="margin:0 0 5px 0; color:#d35400;">Student Verification Required</h4>
+              <p style="font-size:0.8em; margin: 0 0 10px 0; color:#666;">Auto-resolves in ~${hoursLeft} hrs if no action taken.</p>
+              
+              <div id="otp-step-1-${item.id}">
+                <button id="verify-btn-${item.id}" onclick="requestOtp(${item.id}, 'verify')" style="width:100%;">Verify & Confirm Fix via OTP</button>
+                <button onclick="toggleRejectBox(${item.id})" class="btn-danger" style="width:100%; margin-top:5px;">Reject Fix</button>
+              </div>
+
+              <!-- Rejection Reason Sub-Form -->
+              <div id="reject-box-${item.id}" style="display:none; margin-top:10px;">
+                <label style="font-size:0.85em; color:#c0392b;">Reason for Rejection:</label>
+                <textarea id="reject_reason-${item.id}" rows="2" placeholder="Describe why work is incomplete..." style="margin: 5px 0;"></textarea>
+                <button id="reject-btn-${item.id}" onclick="requestOtp(${item.id}, 'reject')" class="btn-danger" style="width:100%;">Send OTP to Submit Rejection</button>
+                <button onclick="toggleRejectBox(${item.id})" style="background:#7f8c8d; width:100%; margin-top:5px;">Cancel</button>
+              </div>
+
+              <!-- OTP Entry Form -->
+              <div id="otp-step-2-${item.id}" style="display:none; margin-top:10px;">
+                <label style="font-size:0.85em;">Enter OTP sent to ${item.kerberos_id}@iitd.ac.in:</label>
+                <input type="text" id="otp_input-${item.id}" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
+                <button onclick="submitOtp(${item.id})" style="width:100%;">Verify OTP & Submit</button>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      const card = document.createElement('div');
+      card.className = cardClass;
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span class="hostel-tag">${item.hostel_name}</span>
+            <span class="${badgeClass}">${item.status}</span>
+            ${item.rejection_count > 0 ? `<span class="rejection-badge">Rejected (${item.rejection_count}x)</span>` : ''}
+          </div>
+          <small style="color:#888;">${new Date(item.created_at).toLocaleDateString()}</small>
+        </div>
+
+        <h3 style="margin: 12px 0 4px 0;">${item.category}</h3>
+        <p style="margin: 0 0 8px 0; color: #666; font-size:0.9em;"><strong>Reporter Kerberos:</strong> ${item.kerberos_id}@iitd.ac.in</p>
+        <p style="margin: 0;">${item.description}</p>
+        
+        ${rejectionHtml}
+
+        <div class="img-preview">
+          <div class="img-box">
+            <span>Issue Photo</span>
+            <img src="${issuePhotoSrc}" onclick="openLightbox('${issuePhotoSrc}')" alt="Issue Photo">
+          </div>
+          ${fixImageHtml}
+        </div>
+
+        ${actionAreaHtml}
+      `;
+
+      container.appendChild(card);
+    });
+  }
+
+  function toggleRejectBox(id) {
+    const box = document.getElementById(`reject-box-${id}`);
+    const step1 = document.getElementById(`otp-step-1-${id}`);
+    if (box.style.display === 'none') {
+      box.style.display = 'block';
+      step1.style.display = 'none';
+    } else {
+      box.style.display = 'none';
+      step1.style.display = 'block';
+    }
+  }
+
+  let activePurpose = {};
+
+  // --- STUDENT VERIFICATION & REJECTION OTP ---
+  async function requestOtp(id, purpose) {
+    activePurpose[id] = purpose;
+    const btn = (purpose === 'verify') ? document.getElementById(`verify-btn-${id}`) : document.getElementById(`reject-btn-${id}`);
+    const originalText = btn ? btn.innerText : 'Send OTP';
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerText = 'Sending OTP... Please wait';
+    }
+
+    try {
+      const res = await fetch(`/api/complaints/send-otp/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purpose })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`OTP sent to ${data.emailSentTo}! Please check your inbox.`);
+        document.getElementById(`otp-step-1-${id}`).style.display = 'none';
+        document.getElementById(`reject-box-${id}`).style.display = 'none';
+        document.getElementById(`otp-step-2-${id}`).style.display = 'block';
+      } else {
+        alert(data.error || 'Failed to send OTP.');
+        if (btn) { btn.disabled = false; btn.innerText = originalText; }
+      }
+    } catch (err) {
+      alert('Network error while requesting OTP.');
+      if (btn) { btn.disabled = false; btn.innerText = originalText; }
+    }
+  }
+
+  async function submitOtp(id) {
+    const userOtp = document.getElementById(`otp_input-${id}`).value;
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const purpose = activePurpose[id] || 'verify';
+    const isApproval = (purpose === 'verify');
+    const rejectionReason = isApproval ? null : (document.getElementById(`reject_reason-${id}`).value || '');
+
+    const res = await fetch(`/api/complaints/verify-otp/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userOtp, approved: isApproval, rejection_reason: rejectionReason })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(isApproval ? 'Fix verified successfully!' : 'Fix rejected. Complaint reopened for caretaker.');
+      loadComplaints();
+    } else {
+      alert(data.error || 'Verification failed.');
+    }
+  }
+
+  loadComplaints();
+</script>
+
+</body>
+</html>
