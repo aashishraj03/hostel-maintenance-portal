@@ -382,8 +382,17 @@
       if (isVerifying) badgeClass += ' verifying';
       if (isResolved) badgeClass += ' resolved';
 
-      const issuePhotoSrc = item.issue_photo.startsWith('http') ? item.issue_photo : `/uploads/issues/${item.issue_photo}`;
-      const fixPhotoSrc = item.fix_photo ? (item.fix_photo.startsWith('http') ? item.fix_photo : `/uploads/fixes/${item.fix_photo}`) : null;
+      // const issuePhotoSrc = item.issue_photo.startsWith('http') ? item.issue_photo : `/uploads/issues/${item.issue_photo}`;
+      // const fixPhotoSrc = item.fix_photo ? (item.fix_photo.startsWith('http') ? item.fix_photo : `/uploads/fixes/${item.fix_photo}`) : null;
+
+      const issuePhotoSrc = (item.issue_photo && (item.issue_photo.startsWith('http') || item.issue_photo.startsWith('data:'))) 
+        ? item.issue_photo 
+        : `/uploads/issues/${item.issue_photo}`;
+
+      const fixPhotoSrc = (item.fix_photo && (item.fix_photo.startsWith('http') || item.fix_photo.startsWith('data:'))) 
+        ? item.fix_photo 
+        : (item.fix_photo ? `/uploads/fixes/${item.fix_photo}` : null);
+
 
       let fixImageHtml = '';
       if (fixPhotoSrc) {
