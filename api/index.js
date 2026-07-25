@@ -3692,7 +3692,6 @@
 
 // module.exports = app;
 
-
 const express = require('express');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
@@ -3707,7 +3706,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-// --- PostgreSQL Pool Setup (Serverless Friendly) ---
+// --- PostgreSQL Pool Setup ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -3719,7 +3718,7 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle PostgreSQL client:', err.message || err);
 });
 
-// Helper: Ensure database tables exist
+// Helper: Ensure all DB tables exist for persistence
 const initDb = async () => {
   try {
     await pool.query(`
@@ -3745,9 +3744,20 @@ const initDb = async () => {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS student_action_otps (
+        complaint_id INT PRIMARY KEY,
+        otp VARCHAR(10) NOT NULL,
+        purpose VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
       ALTER TABLE complaints ADD COLUMN IF NOT EXISTS issue_photo TEXT;
       ALTER TABLE complaints ADD COLUMN IF NOT EXISTS fix_photo TEXT;
       ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP;
+      ALTER TABLE complaints ADD COLUMN IF NOT EXISTS rejection_count INT DEFAULT 0;
+      ALTER TABLE complaints ADD COLUMN IF NOT EXISTS last_rejection_reason TEXT;
     `);
 
     console.log("Database initialized successfully!");
@@ -3768,7 +3778,7 @@ cloudinary.config({
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5 MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 const uploadToCloudinary = (fileBuffer) => {
@@ -3826,7 +3836,9 @@ app.get('/api/complaints', async (req, res) => {
   }
 });
 
-// POST Request Submission OTP (Student)
+// -----------------------------------------------------------------
+// 1️⃣ STUDENT COMPLAINT SUBMISSION OTP ENDPOINTS
+// -----------------------------------------------------------------
 app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
   try {
     const hostel = req.body.hostel || req.body.hostel_name;
@@ -3870,7 +3882,6 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
       tempId: cleanKerberos, 
       emailSentTo: studentEmail,
       studentEmail: studentEmail,
-      email: studentEmail,
       kerberos: cleanKerberos
     });
   } catch (err) {
@@ -3879,7 +3890,6 @@ app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res
   }
 });
 
-// POST Verify Submission OTP (Student)
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
     const otp = req.body.userOtp || req.body.otp || req.body.code || req.body.otpCode;
@@ -3942,7 +3952,9 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   }
 });
 
-// POST Request Caretaker Fix OTP
+// -----------------------------------------------------------------
+// 2️⃣ CARETAKER FIX SUBMISSION OTP ENDPOINTS
+// -----------------------------------------------------------------
 app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, res) => {
   try {
     const { id } = req.params;
@@ -3990,7 +4002,6 @@ app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, 
   }
 });
 
-// POST Verify Caretaker Fix OTP
 app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -4013,7 +4024,6 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     const caretakerData = otpResult.rows[0];
 
-    // Update complaint status to Awaiting Student Verification
     const updated = await pool.query(
       `UPDATE complaints 
        SET status = 'Awaiting Student Verification', 
@@ -4033,6 +4043,106 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
   } catch (err) {
     console.error("Caretaker Verification Error:", err.message || err);
     return res.status(500).json({ error: err.message || 'Failed to verify Caretaker OTP' });
+  }
+});
+
+// -----------------------------------------------------------------
+// 3️⃣ STUDENT FIX VERIFICATION / REJECTION OTP ENDPOINTS
+// -----------------------------------------------------------------
+app.post('/api/complaints/send-otp/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { purpose } = req.body; // 'verify' or 'reject'
+
+    const complaintRes = await pool.query(`SELECT * FROM complaints WHERE id = $1`, [id]);
+    if (complaintRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Complaint not found' });
+    }
+    const complaint = complaintRes.rows[0];
+
+    const studentEmail = `${complaint.kerberos_id.trim().toLowerCase()}@iitd.ac.in`;
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    await pool.query(
+      `INSERT INTO student_action_otps (complaint_id, otp, purpose)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (complaint_id) DO UPDATE 
+       SET otp = EXCLUDED.otp, purpose = EXCLUDED.purpose, created_at = CURRENT_TIMESTAMP`,
+      [id, otp, purpose || 'verify']
+    );
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: studentEmail,
+      subject: `OTP to ${purpose === 'reject' ? 'Reject' : 'Confirm'} Fix for Issue #${id}`,
+      text: `Your OTP is: ${otp}`
+    });
+
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      emailSentTo: studentEmail
+    });
+  } catch (err) {
+    console.error("Student Send OTP Error:", err.message || err);
+    res.status(500).json({ error: err.message || 'Failed to send OTP' });
+  }
+});
+
+app.post('/api/complaints/verify-otp/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userOtp, approved, rejection_reason } = req.body;
+
+    const cleanOtp = userOtp ? userOtp.toString().trim() : '';
+
+    if (!cleanOtp) {
+      return res.status(400).json({ error: 'OTP is required' });
+    }
+
+    const otpResult = await pool.query(
+      `SELECT * FROM student_action_otps WHERE complaint_id = $1`,
+      [id]
+    );
+
+    if (otpResult.rows.length === 0 || otpResult.rows[0].otp !== cleanOtp) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    }
+
+    let updatedComplaint;
+
+    if (approved) {
+      // Mark as fully resolved
+      const resQuery = await pool.query(
+        `UPDATE complaints 
+         SET status = 'Resolved' 
+         WHERE id = $1 RETURNING *`,
+        [id]
+      );
+      updatedComplaint = resQuery.rows[0];
+    } else {
+      // Reject fix and reopen complaint for caretaker
+      const resQuery = await pool.query(
+        `UPDATE complaints 
+         SET status = 'Pending', 
+             rejection_count = COALESCE(rejection_count, 0) + 1,
+             last_rejection_reason = $1 
+         WHERE id = $2 RETURNING *`,
+        [rejection_reason || 'Fix rejected by student.', id]
+      );
+      updatedComplaint = resQuery.rows[0];
+    }
+
+    await pool.query(`DELETE FROM student_action_otps WHERE complaint_id = $1`, [id]);
+
+    return res.json({
+      success: true,
+      message: approved ? 'Fix verified successfully!' : 'Fix rejected. Reopened for caretaker.',
+      complaint: updatedComplaint
+    });
+  } catch (err) {
+    console.error("Student Verify OTP Error:", err.message || err);
+    return res.status(500).json({ error: err.message || 'Failed to verify OTP' });
   }
 });
 
