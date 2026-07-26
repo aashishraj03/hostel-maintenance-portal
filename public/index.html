@@ -28,7 +28,6 @@
       overflow: hidden;
     }
 
-    /* Faded IIT Delhi Watermark Background */
     .landing-card::before {
       content: "";
       position: absolute;
@@ -41,7 +40,6 @@
       pointer-events: none;
     }
 
-    /* Bigger Headline */
     .landing-title { 
       color: #2c3e50; 
       margin-bottom: 8px; 
@@ -60,7 +58,6 @@
       z-index: 1;
     }
 
-    /* Buttons Shifted Down */
     .role-options-container { 
       display: flex; 
       flex-direction: column; 
@@ -105,7 +102,6 @@
     .filter-btn { background: #cbd5e1; color: #334155; padding: 8px 12px; border-radius: 4px; font-weight: bold; border: none; cursor: pointer; }
     .filter-btn.active { background: #2563eb; color: white; }
 
-    /* Custom styling for Caretaker Dropdown Button */
     .caretaker-dropdown-select {
       font-size: 1.08em;
       padding: 12px 14px;
@@ -192,6 +188,30 @@
 
     <h1>Campus Maintenance Portal</h1>
 
+    <!-- Student Kerberos Verification Card -->
+    <div class="card" id="studentLoginCard" style="display: none; background: #e8f8f5; border: 1px solid #a3e4d7;">
+      <h2 style="margin-top: 0; color: #16a085;">🎓 Student Kerberos Verification</h2>
+      
+      <!-- Step 1: Input Kerberos -->
+      <div id="stLoginStep1">
+        <div class="form-group">
+          <label style="color: #0e6251;">Enter Kerberos ID:</label>
+          <input type="text" id="st_kerberos_input" placeholder="e.g. ce1230456" style="margin-bottom: 10px;">
+        </div>
+        <button onclick="requestStudentLoginOtp()" id="stLoginOtpBtn" style="background: #16a085; padding: 10px 18px;">Send Verification OTP to Kerberos Webmail</button>
+      </div>
+
+      <!-- Step 2: Enter OTP -->
+      <div id="stLoginStep2" style="display: none; margin-top: 10px; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #a3e4d7;">
+        <label id="stOtpLabel" style="color: #117a65; font-weight: bold;">Enter 6-Digit OTP sent to Kerberos Webmail:</label>
+        <input type="text" id="st_login_otp_input" maxlength="6" placeholder="123456" style="margin: 8px 0 12px 0;">
+        <div style="display: flex; gap: 10px;">
+          <button onclick="verifyStudentLoginOtp()" style="flex: 1; background: #16a085;">Verify OTP & Unlock Portal</button>
+          <button onclick="resetStudentLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Caretaker Hostel & OTP Login Card -->
     <div class="card" id="caretakerHostelSelectCard" style="display: none; background: #ebf5fb; border: 1px solid #b3e5fc;">
       <h2 style="margin-top: 0; color: #2980b9;">🛠️ Caretaker Portal Verification</h2>
@@ -235,9 +255,9 @@
     </div>
 
     <!-- Student Report Form -->
-    <div class="card" id="studentFormCard">
-      <h2>Report an Issue (Student)</h2>
-      <form id="complaintForm" onsubmit="initiateSubmissionOtp(event)">
+    <div class="card" id="studentFormCard" style="display: none;">
+      <h2>Report an Issue</h2>
+      <form id="complaintForm" onsubmit="submitStudentDirectComplaint(event)">
         <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <div class="form-group" style="flex: 1; min-width: 180px;">
             <label>Select Hostel</label>
@@ -263,7 +283,7 @@
           </div>
           <div class="form-group" style="flex: 1; min-width: 180px;">
             <label>Kerberos ID</label>
-            <input type="text" id="sub_kerberos" name="kerberos_id" placeholder="e.g. ce1230456" required oninput="loadComplaints()">
+            <input type="text" id="sub_kerberos" name="kerberos_id" readonly style="background: #eef2f5; font-weight: bold;">
           </div>
           <div class="form-group" style="flex: 1; min-width: 150px;">
             <label>Category</label>
@@ -285,30 +305,20 @@
           <input type="file" id="sub_photo" name="issue_photo" accept="image/*" required>
         </div>
 
-        <!-- Step 1 Button -->
-        <div id="submitStep1">
-          <button type="submit" id="requestSubOtpBtn">Send OTP to Submit Complaint</button>
-        </div>
-
-        <!-- Step 2 Input -->
-        <div id="submitStep2" style="display:none; margin-top:10px; background:#e8f5e9; padding:15px; border-radius:6px; border:1px solid #c8e6c9;">
-          <label style="color:#2e7d32;">Enter 6-Digit OTP sent to your Kerberos Email:</label>
-          <input type="text" id="sub_otp_input" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
-          <div style="display:flex; gap:10px;">
-            <button type="button" onclick="confirmSubmissionOtp()" style="flex:1;">Verify OTP & Post Complaint</button>
-            <button type="button" onclick="resetSubmissionForm()" style="background:#7f8c8d; flex:1;">Cancel</button>
-          </div>
+        <div>
+          <button type="submit" id="postComplaintBtn">Post Maintenance Issue</button>
         </div>
       </form>
     </div>
 
     <!-- Filter Bar -->
-    <div class="filter-bar">
+    <div class="filter-bar" id="portalFilterBar" style="display: none;">
       <div>
         <h3 style="margin: 0;" id="dashboardTitle">Student Feed</h3>
         <small style="color: #cbd5e1;">Search or filter by hostel</small>
       </div>
       <div class="filter-controls">
+        <!-- My Issues Filter Toggle (Student Only - On By Default) -->
         <button type="button" class="filter-btn active" id="myIssuesToggleBtn" onclick="toggleMyIssuesFilter()">
           👤 My Issues
         </button>
@@ -350,10 +360,13 @@
 
 <script>
   let currentRole = 'student';
-  let activeSubmissionTempId = null;
-  let filterMyIssuesOnly = true;
+  let loggedInKerberos = "";
+  let isStudentVerified = false;
+
   let selectedCaretakerHostel = "";
   let isCaretakerVerified = false;
+
+  let filterMyIssuesOnly = true;
 
   function selectRole(role) {
     document.getElementById('landingPage').style.display = 'none';
@@ -388,21 +401,183 @@
   function switchRole(role) {
     currentRole = role;
 
-    document.getElementById('studentFormCard').style.display = (role === 'student') ? 'block' : 'none';
-    document.getElementById('myIssuesToggleBtn').style.display = (role === 'student') ? 'inline-block' : 'none';
-    document.getElementById('caretakerHostelSelectCard').style.display = (role === 'caretaker') ? 'block' : 'none';
-    
-    document.querySelector('.filter-bar').style.display = (role === 'student') ? 'flex' : 'none';
-    document.getElementById('dashboardTitle').innerText = (role === 'student') ? 'Student Feed' : 'Caretaker Action Dashboard';
-    
-    if (role === 'caretaker') {
+    if (role === 'student') {
+      resetStudentLogin();
+    } else if (role === 'caretaker') {
       resetCaretakerLogin();
     }
 
     loadComplaints();
   }
 
-  // --- CARETAKER PORTAL VERIFICATION VIA OTP ---
+  // --- STUDENT LOGIN OTP ---
+  async function requestStudentLoginOtp() {
+    const kerberos = document.getElementById('st_kerberos_input').value.trim();
+    if (!kerberos) {
+      alert('Please enter your Kerberos ID.');
+      return;
+    }
+
+    const btn = document.getElementById('stLoginOtpBtn');
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP...';
+
+    try {
+      const res = await fetch('/api/student/request-login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kerberos_id: kerberos })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`OTP sent to ${data.emailSentTo}!`);
+        document.getElementById('stLoginStep1').style.display = 'none';
+        document.getElementById('stLoginStep2').style.display = 'block';
+        document.getElementById('stOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
+      } else {
+        alert(data.error || 'Failed to send login OTP.');
+        btn.disabled = false;
+        btn.innerText = 'Send Verification OTP to Kerberos Webmail';
+      }
+    } catch (err) {
+      alert('Network error while requesting login OTP.');
+      btn.disabled = false;
+      btn.innerText = 'Send Verification OTP to Kerberos Webmail';
+    }
+  }
+
+  async function verifyStudentLoginOtp() {
+    const kerberos = document.getElementById('st_kerberos_input').value.trim();
+    const userOtp = document.getElementById('st_login_otp_input').value.trim();
+
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch('/api/student/verify-login-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kerberos_id: kerberos, userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`Verified! Welcome ${data.kerberos_id}@iitd.ac.in`);
+      loggedInKerberos = data.kerberos_id;
+      isStudentVerified = true;
+
+      document.getElementById('sub_kerberos').value = loggedInKerberos;
+      document.getElementById('activeRoleTag').innerText = `Mode: Student Portal (${loggedInKerberos})`;
+      
+      document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentFormCard').style.display = 'block';
+      document.getElementById('portalFilterBar').style.display = 'flex';
+      
+      filterMyIssuesOnly = true;
+      document.getElementById('myIssuesToggleBtn').classList.add('active');
+
+      loadComplaints();
+    } else {
+      alert(data.error || 'Invalid OTP.');
+    }
+  }
+
+  function resetStudentLogin() {
+    loggedInKerberos = "";
+    isStudentVerified = false;
+    filterMyIssuesOnly = true;
+
+    document.getElementById('st_kerberos_input').value = "";
+    document.getElementById('st_login_otp_input').value = "";
+    document.getElementById('studentLoginCard').style.display = 'block';
+    document.getElementById('stLoginStep1').style.display = 'block';
+    document.getElementById('stLoginStep2').style.display = 'none';
+
+    document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('studentFormCard').style.display = 'none';
+    document.getElementById('portalFilterBar').style.display = 'none';
+
+    const btn = document.getElementById('stLoginOtpBtn');
+    btn.disabled = false;
+    btn.innerText = 'Send Verification OTP to Kerberos Webmail';
+  }
+
+  // --- STUDENT DIRECT COMPLAINT SUBMISSION ---
+  async function submitStudentDirectComplaint(event) {
+    event.preventDefault();
+    const btn = document.getElementById('postComplaintBtn');
+    btn.disabled = true;
+    btn.innerText = 'Posting Issue... Please wait';
+
+    const formData = new FormData(document.getElementById('complaintForm'));
+
+    try {
+      const res = await fetch('/api/complaints/submit-direct', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert('Complaint posted successfully! Caretaker has been notified.');
+        document.getElementById('complaintForm').reset();
+        document.getElementById('sub_kerberos').value = loggedInKerberos;
+        btn.disabled = false;
+        btn.innerText = 'Post Maintenance Issue';
+        loadComplaints();
+      } else {
+        alert(data.error || 'Failed to submit complaint.');
+        btn.disabled = false;
+        btn.innerText = 'Post Maintenance Issue';
+      }
+    } catch (err) {
+      alert('Network error while posting complaint.');
+      btn.disabled = false;
+      btn.innerText = 'Post Maintenance Issue';
+    }
+  }
+
+  // --- STUDENT DIRECT CONFIRM / REJECT ACTION (NO OTP) ---
+  async function submitStudentVerificationDirect(id, approved) {
+    let rejectionReason = null;
+    
+    if (!approved) {
+      rejectionReason = document.getElementById(`reject_reason-${id}`).value.trim();
+      if (!rejectionReason) {
+        alert('Please describe why the fix is incomplete before rejecting.');
+        return;
+      }
+    }
+
+    const btn = approved ? document.getElementById(`verify-btn-${id}`) : document.getElementById(`reject-sub-btn-${id}`);
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await fetch(`/api/complaints/verify-direct/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, rejection_reason: rejectionReason })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(approved ? 'Fix confirmed and resolved!' : 'Fix rejected. Ticket reopened for caretaker.');
+        loadComplaints();
+      } else {
+        alert(data.error || 'Action failed.');
+        if (btn) btn.disabled = false;
+      }
+    } catch (err) {
+      alert('Network error while submitting response.');
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // --- CARETAKER PORTAL VERIFICATION ---
   async function requestCaretakerLoginOtp() {
     const hostel = document.getElementById('caretaker_hostel_dropdown').value;
     if (!hostel) {
@@ -462,6 +637,9 @@
       isCaretakerVerified = true;
       document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentFormCard').style.display = 'none';
+      document.getElementById('portalFilterBar').style.display = 'none';
       loadComplaints();
     } else {
       alert(data.error || 'Invalid OTP.');
@@ -471,9 +649,16 @@
   function resetCaretakerLogin() {
     selectedCaretakerHostel = "";
     isCaretakerVerified = false;
+
     document.getElementById('caretaker_hostel_dropdown').value = "";
     document.getElementById('ctLoginStep1').style.display = 'block';
     document.getElementById('ctLoginStep2').style.display = 'none';
+    
+    document.getElementById('caretakerHostelSelectCard').style.display = 'block';
+    document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('studentFormCard').style.display = 'none';
+    document.getElementById('portalFilterBar').style.display = 'none';
+
     const btn = document.getElementById('ctLoginOtpBtn');
     btn.disabled = false;
     btn.innerText = 'Send Verification OTP to Webmail';
@@ -548,82 +733,12 @@
     loadComplaints(searchText);
   }
 
-  // --- STUDENT SUBMISSION OTP ---
-  async function initiateSubmissionOtp(event) {
-    event.preventDefault();
-    const btn = document.getElementById('requestSubOtpBtn');
-    btn.disabled = true;
-    btn.innerText = 'Sending OTP... Please wait';
-
-    const formData = new FormData(document.getElementById('complaintForm'));
-
-    try {
-      const res = await fetch('/api/complaints/request-submission-otp', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        activeSubmissionTempId = data.tempId;
-        alert(`An OTP has been sent to ${data.emailSentTo}. Please check your email!`);
-        document.getElementById('submitStep1').style.display = 'none';
-        document.getElementById('submitStep2').style.display = 'block';
-      } else {
-        alert(data.error || 'Failed to request OTP.');
-        resetSubmissionFormBtn(btn);
-      }
-    } catch (err) {
-      alert('Network error while requesting OTP.');
-      resetSubmissionFormBtn(btn);
-    }
-  }
-
-  function resetSubmissionFormBtn(btn) {
-    btn.disabled = false;
-    btn.innerText = 'Send OTP to Submit Complaint';
-  }
-
-  async function confirmSubmissionOtp() {
-    const userOtp = document.getElementById('sub_otp_input').value;
-    if (!userOtp || userOtp.length !== 6) {
-      alert('Please enter a valid 6-digit OTP.');
-      return;
-    }
-
-    const res = await fetch('/api/complaints/verify-submission-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tempId: activeSubmissionTempId, userOtp })
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert('Complaint verified and posted successfully! Caretaker has been notified.');
-      resetSubmissionForm();
-      loadComplaints();
-    } else {
-      alert(data.error || 'Verification failed.');
-    }
-  }
-
-  function resetSubmissionForm() {
-    document.getElementById('complaintForm').reset();
-    document.getElementById('submitStep1').style.display = 'block';
-    document.getElementById('submitStep2').style.display = 'none';
-    const btn = document.getElementById('requestSubOtpBtn');
-    resetSubmissionFormBtn(btn);
-    activeSubmissionTempId = null;
-  }
-
   async function loadComplaints(searchQuery = '') {
     const container = document.getElementById('complaintsList');
     container.innerHTML = '';
 
-    if (currentRole === 'caretaker' && !isCaretakerVerified) {
-      return;
-    }
+    if (currentRole === 'caretaker' && !isCaretakerVerified) return;
+    if (currentRole === 'student' && !isStudentVerified) return;
 
     let activeHostel = (currentRole === 'student') ? document.getElementById('hostelFilter').value : selectedCaretakerHostel;
 
@@ -634,10 +749,10 @@
       data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));
     }
 
+    // --- STUDENT "MY ISSUES" FILTERING ---
     if (currentRole === 'student' && filterMyIssuesOnly) {
-      const currentKerberos = document.getElementById('sub_kerberos').value.trim().toLowerCase();
-      if (currentKerberos) {
-        data = data.filter(item => item.kerberos_id && item.kerberos_id.trim().toLowerCase() === currentKerberos);
+      if (loggedInKerberos) {
+        data = data.filter(item => item.kerberos_id && item.kerberos_id.trim().toLowerCase() === loggedInKerberos.toLowerCase());
       }
     }
 
@@ -707,15 +822,18 @@
         }
       } 
       else if (currentRole === 'student') {
-        if (isVerifying) {
+        // ONLY SHOW ACTION BUTTONS IF THIS ISSUE BELONGS TO THE LOGGED IN STUDENT
+        const isOwner = item.kerberos_id && item.kerberos_id.trim().toLowerCase() === loggedInKerberos.toLowerCase();
+
+        if (isVerifying && isOwner) {
           const hoursLeft = Math.max(0, (24 - (item.hours_since_fix || 0))).toFixed(1);
           actionAreaHtml = `
             <div class="verify-box" id="verify-box-${item.id}">
               <h4 style="margin:0 0 5px 0; color:#d35400;">Student Verification Required</h4>
               <p style="font-size:0.8em; margin: 0 0 10px 0; color:#666;">Auto-resolves in ~${hoursLeft} hrs if no action taken.</p>
               
-              <div id="otp-step-1-${item.id}">
-                <button id="verify-btn-${item.id}" onclick="requestOtp(${item.id}, 'verify')" style="width:100%;">Verify & Confirm Fix via OTP</button>
+              <div id="action-step-1-${item.id}">
+                <button id="verify-btn-${item.id}" onclick="submitStudentVerificationDirect(${item.id}, true)" style="width:100%;">Confirm & Accept Fix</button>
                 <button onclick="toggleRejectBox(${item.id})" class="btn-danger" style="width:100%; margin-top:5px;">Reject Fix</button>
               </div>
 
@@ -723,15 +841,8 @@
               <div id="reject-box-${item.id}" style="display:none; margin-top:10px;">
                 <label style="font-size:0.85em; color:#c0392b;">Reason for Rejection:</label>
                 <textarea id="reject_reason-${item.id}" rows="2" placeholder="Describe why work is incomplete..." style="margin: 5px 0;"></textarea>
-                <button id="reject-btn-${item.id}" onclick="requestOtp(${item.id}, 'reject')" class="btn-danger" style="width:100%;">Send OTP to Submit Rejection</button>
+                <button id="reject-sub-btn-${item.id}" onclick="submitStudentVerificationDirect(${item.id}, false)" class="btn-danger" style="width:100%;">Submit Rejection</button>
                 <button onclick="toggleRejectBox(${item.id})" style="background:#7f8c8d; width:100%; margin-top:5px;">Cancel</button>
-              </div>
-
-              <!-- OTP Entry Form -->
-              <div id="otp-step-2-${item.id}" style="display:none; margin-top:10px;">
-                <label style="font-size:0.85em;">Enter OTP sent to ${item.kerberos_id}@iitd.ac.in:</label>
-                <input type="text" id="otp_input-${item.id}" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
-                <button onclick="submitOtp(${item.id})" style="width:100%;">Verify OTP & Submit</button>
               </div>
             </div>
           `;
@@ -773,76 +884,13 @@
 
   function toggleRejectBox(id) {
     const box = document.getElementById(`reject-box-${id}`);
-    const step1 = document.getElementById(`otp-step-1-${id}`);
+    const step1 = document.getElementById(`action-step-1-${id}`);
     if (box.style.display === 'none') {
       box.style.display = 'block';
       step1.style.display = 'none';
     } else {
       box.style.display = 'none';
       step1.style.display = 'block';
-    }
-  }
-
-  let activePurpose = {};
-
-  // --- STUDENT VERIFICATION & REJECTION OTP ---
-  async function requestOtp(id, purpose) {
-    activePurpose[id] = purpose;
-    const btn = (purpose === 'verify') ? document.getElementById(`verify-btn-${id}`) : document.getElementById(`reject-btn-${id}`);
-    const originalText = btn ? btn.innerText : 'Send OTP';
-
-    if (btn) {
-      btn.disabled = true;
-      btn.innerText = 'Sending OTP... Please wait';
-    }
-
-    try {
-      const res = await fetch(`/api/complaints/send-otp/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ purpose })
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        alert(`OTP sent to ${data.emailSentTo}! Please check your inbox.`);
-        document.getElementById(`otp-step-1-${id}`).style.display = 'none';
-        document.getElementById(`reject-box-${id}`).style.display = 'none';
-        document.getElementById(`otp-step-2-${id}`).style.display = 'block';
-      } else {
-        alert(data.error || 'Failed to send OTP.');
-        if (btn) { btn.disabled = false; btn.innerText = originalText; }
-      }
-    } catch (err) {
-      alert('Network error while requesting OTP.');
-      if (btn) { btn.disabled = false; btn.innerText = originalText; }
-    }
-  }
-
-  async function submitOtp(id) {
-    const userOtp = document.getElementById(`otp_input-${id}`).value;
-    if (!userOtp || userOtp.length !== 6) {
-      alert('Please enter a valid 6-digit OTP.');
-      return;
-    }
-
-    const purpose = activePurpose[id] || 'verify';
-    const isApproval = (purpose === 'verify');
-    const rejectionReason = isApproval ? null : (document.getElementById(`reject_reason-${id}`).value || '');
-
-    const res = await fetch(`/api/complaints/verify-otp/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userOtp, approved: isApproval, rejection_reason: rejectionReason })
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert(isApproval ? 'Fix verified successfully!' : 'Fix rejected. Complaint reopened for caretaker.');
-      loadComplaints();
-    } else {
-      alert(data.error || 'Verification failed.');
     }
   }
 </script>

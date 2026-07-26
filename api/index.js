@@ -6762,69 +6762,197 @@ function generateOTP() {
 const otpStore = new Map();
 
 // =================================================================
-// 1. STUDENT SUBMIT COMPLAINT: REQUEST OTP
+// 0. STUDENT LOGIN OTP (REQUEST & VERIFY)
 // =================================================================
-app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
+app.post('/api/student/request-login-otp', async (req, res) => {
   try {
-    const hostel_name = req.body.hostel_name;
-    const kerberos_id = req.body.kerberos_id;
-    const category = req.body.category;
-    const description = req.body.description;
-
-    if (!hostel_name || !kerberos_id || !category || !description) {
-      return res.status(400).json({ error: "All fields are required" });
+    const { kerberos_id } = req.body;
+    if (!kerberos_id || !kerberos_id.trim()) {
+      return res.status(400).json({ error: "Kerberos ID is required" });
     }
 
-    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
-    const studentEmail = `${kerberos_id.trim()}@iitd.ac.in`;
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const cleanKerberos = kerberos_id.trim().toLowerCase();
+    const studentEmail = `${cleanKerberos}@iitd.ac.in`;
     const otp = generateOTP();
 
-    // Store image directly as Data URI so frontend renders it inline
-    const photoDataUri = uploadedFile 
-      ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
-      : '';
-
-    otpStore.set(tempId, {
+    otpStore.set(`student_login_${cleanKerberos}`, {
       otp,
-      kerberos_id: kerberos_id.trim(),
-      hostel_name,
-      category,
-      description,
-      issue_photo: photoDataUri,
       expiresAt: Date.now() + 5 * 60 * 1000
     });
 
     await transporter.sendMail({
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: studentEmail,
-      subject: '🔑 OTP for Hostel Complaint Submission',
-      // text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 5 minutes.`
+      subject: `🔑 Student Portal Verification OTP - ${cleanKerberos}`,
       html: `
-      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
-        <p style="color: #555; font-size: 14px;">Dear Student,</p>
-        <p style="color: #555; font-size: 14px;">Use the following One-Time Password (OTP) to complete your hostel complaint submission:</p>
-        <div style="text-align: center; margin: 25px 0;">
-          <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #27ae60; background: #e8f8f5; padding: 10px 20px; border-radius: 6px; border: 1px dashed #27ae60; display: inline-block;">${otp}</span>
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+          <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Student Portal:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #27ae60; background: #e8f8f5; padding: 10px 20px; border-radius: 6px; border: 1px dashed #27ae60; display: inline-block;">${otp}</span>
+          </div>
+          <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
         </div>
-        <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Please do not share this code with anyone.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-        <p style="color: #95a5a6; font-size: 12px; margin: 0;">This is an automated message from the Hostel Maintenance System. Please do not reply to this email.</p>
-      </div>
-    `
+      `
     });
 
-    return res.json({ 
-      success: true, 
-      tempId: tempId, 
-      emailSentTo: studentEmail 
-    });
+    return res.json({ success: true, emailSentTo: studentEmail });
   } catch (err) {
-    console.error("Error in request-submission-otp:", err);
-    return res.status(500).json({ error: err.message || "Failed to send submission OTP" });
+    console.error("Error sending student login OTP:", err);
+    return res.status(500).json({ error: err.message || "Failed to send Student Login OTP" });
   }
 });
+
+app.post('/api/student/verify-login-otp', async (req, res) => {
+  try {
+    const { kerberos_id, userOtp } = req.body;
+    const cleanKerberos = kerberos_id.trim().toLowerCase();
+    const storeKey = `student_login_${cleanKerberos}`;
+    const pending = otpStore.get(storeKey);
+
+    if (!pending || pending.expiresAt < Date.now()) {
+      return res.status(400).json({ error: "OTP expired or invalid" });
+    }
+
+    if (pending.otp !== String(userOtp).trim()) {
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
+
+    otpStore.delete(storeKey);
+    return res.json({ success: true, kerberos_id: cleanKerberos });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Verification failed" });
+  }
+});
+
+// // =================================================================
+// // 1. STUDENT SUBMIT COMPLAINT: REQUEST OTP
+// // =================================================================
+// app.post('/api/complaints/request-submission-otp', upload.any(), async (req, res) => {
+//   try {
+//     const hostel_name = req.body.hostel_name;
+//     const kerberos_id = req.body.kerberos_id;
+//     const category = req.body.category;
+//     const description = req.body.description;
+
+//     if (!hostel_name || !kerberos_id || !category || !description) {
+//       return res.status(400).json({ error: "All fields are required" });
+//     }
+
+//     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+//     const studentEmail = `${kerberos_id.trim()}@iitd.ac.in`;
+//     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+//     const otp = generateOTP();
+
+//     // Store image directly as Data URI so frontend renders it inline
+//     const photoDataUri = uploadedFile 
+//       ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+//       : '';
+
+//     otpStore.set(tempId, {
+//       otp,
+//       kerberos_id: kerberos_id.trim(),
+//       hostel_name,
+//       category,
+//       description,
+//       issue_photo: photoDataUri,
+//       expiresAt: Date.now() + 5 * 60 * 1000
+//     });
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: studentEmail,
+//       subject: '🔑 OTP for Hostel Complaint Submission',
+//       // text: `Your OTP for submitting the complaint is: ${otp}\nThis OTP is valid for 5 minutes.`
+//       html: `
+//       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//         <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//         <p style="color: #555; font-size: 14px;">Dear Student,</p>
+//         <p style="color: #555; font-size: 14px;">Use the following One-Time Password (OTP) to complete your hostel complaint submission:</p>
+//         <div style="text-align: center; margin: 25px 0;">
+//           <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #27ae60; background: #e8f8f5; padding: 10px 20px; border-radius: 6px; border: 1px dashed #27ae60; display: inline-block;">${otp}</span>
+//         </div>
+//         <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Please do not share this code with anyone.</p>
+//         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+//         <p style="color: #95a5a6; font-size: 12px; margin: 0;">This is an automated message from the Hostel Maintenance System. Please do not reply to this email.</p>
+//       </div>
+//     `
+//     });
+
+//     return res.json({ 
+//       success: true, 
+//       tempId: tempId, 
+//       emailSentTo: studentEmail 
+//     });
+//   } catch (err) {
+//     console.error("Error in request-submission-otp:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send submission OTP" });
+//   }
+// });
+
+// =================================================================
+// 1. DIRECT COMPLAINT SUBMISSION (AFTER VERIFIED STUDENT LOGIN)
+// =================================================================
+app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
+  try {
+    const { hostel_name, kerberos_id, category, description } = req.body;
+
+    if (!hostel_name || !kerberos_id || !category || !description) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+    const photoDataUri = uploadedFile 
+      ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+      : '';
+
+    const insertQuery = `
+      INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, 'Pending', NOW())
+      RETURNING *;
+    `;
+    const result = await pool.query(insertQuery, [
+      kerberos_id.trim().toLowerCase(),
+      hostel_name,
+      category,
+      description,
+      photoDataUri
+    ]);
+
+    // Notify Caretaker
+    try {
+      const caretakerEmail = getCaretakerEmail(hostel_name);
+      await transporter.sendMail({
+        from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+        to: caretakerEmail,
+        subject: `🚨 New Maintenance Request: ${hostel_name}`,
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #e74c3c; margin-top: 0;">🚨 New Maintenance Issue Lodged</h2>
+          <p style="color: #555; font-size: 14px;">A new maintenance complaint requires your attention:</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+            <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${hostel_name}</td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${category}</td></tr>
+            <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${kerberos_id}@iitd.ac.in</td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${description}</td></tr>
+          </table>
+
+          <p style="color: #555; font-size: 13px;">Please log into the caretaker dashboard to review details and submit resolution proof once fixed.</p>
+        </div>
+      `
+      });
+    } catch (mailErr) {
+      console.error("Failed to send caretaker notification email:", mailErr);
+    }
+
+    return res.json({ success: true, complaint: result.rows[0] });
+  } catch (err) {
+    console.error("Error submitting direct complaint:", err);
+    return res.status(500).json({ error: err.message || "Failed to submit complaint" });
+  }
+});
+
 
 // =================================================================
 // 2. STUDENT VERIFY OTP & POST COMPLAINT
@@ -7018,83 +7146,151 @@ app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
   }
 });
 
+// // =================================================================
+// // 5. STUDENT VERIFICATION / REJECTION: SEND OTP
+// // =================================================================
+// app.post('/api/complaints/send-otp/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { purpose } = req.body;
+
+//     const complaintRes = await pool.query('SELECT * FROM complaints WHERE id = $1', [id]);
+//     if (complaintRes.rows.length === 0) {
+//       return res.status(404).json({ error: "Complaint not found" });
+//     }
+
+//     const complaint = complaintRes.rows[0];
+//     const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
+//     const otp = generateOTP();
+
+//     otpStore.set(`student_confirm_${id}`, {
+//       otp,
+//       purpose,
+//       expiresAt: Date.now() + 5 * 60 * 1000
+//     });
+
+
+//     // Helper Variables Defined First
+//     const actionLabel = purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix';
+//     const actionDesc = purpose === 'verify' ? 'confirm resolution for' : 'reject resolution for';
+//     const accentColor = purpose === 'verify' ? '#27ae60' : '#c0392b';
+//     const accentBg = purpose === 'verify' ? '#e8f8f5' : '#fdf2e9';
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: studentEmail,
+//       subject: `🔑 OTP to ${purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix'} for Issue #${id}`,
+//       // text: `Your OTP to ${purpose === 'verify' ? 'confirm resolution' : 'reject resolution'} for Issue #${id} is: ${otp}`
+//       html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//           <p style="color: #555; font-size: 14px;">Dear Student,</p>
+//           <p style="color: #555; font-size: 14px;">Use the following One-Time Password (OTP) to <strong>${actionDesc} Issue #${id}</strong> (${complaint.hostel_name}):</p>
+          
+//           <div style="text-align: center; margin: 25px 0;">
+//             <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: ${accentColor}; background: ${accentBg}; padding: 10px 20px; border-radius: 6px; border: 1px dashed ${accentColor}; display: inline-block;">${otp}</span>
+//           </div>
+          
+//           <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Do not share this code with anyone.</p>
+//           <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+//           <p style="color: #95a5a6; font-size: 12px; margin: 0;">This is an automated notification from the Hostel Maintenance Portal.</p>
+//         </div>
+//       `
+//     });
+
+//     return res.json({ success: true, emailSentTo: studentEmail });
+//   } catch (err) {
+//     console.error("Error in send-otp:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send OTP" });
+//   }
+// });
+
+// // =================================================================
+// // 6. STUDENT VERIFICATION / REJECTION: VERIFY OTP
+// // =================================================================
+// app.post('/api/complaints/verify-otp/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { userOtp, approved, rejection_reason } = req.body;
+
+//     const pendingKey = `student_confirm_${id}`;
+//     const pending = otpStore.get(pendingKey);
+
+//     if (!pending || pending.expiresAt < Date.now()) {
+//       return res.status(400).json({ error: "OTP expired or invalid" });
+//     }
+
+//     if (pending.otp !== String(userOtp).trim()) {
+//       return res.status(400).json({ error: "Invalid OTP" });
+//     }
+
+//     let updateQuery = '';
+//     let queryParams = [];
+
+//     if (approved) {
+//       updateQuery = `UPDATE complaints SET status = 'Resolved' WHERE id = $1 RETURNING *;`;
+//       queryParams = [id];
+//     } else {
+//       updateQuery = `
+//         UPDATE complaints 
+//         SET status = 'Pending', 
+//             rejection_count = COALESCE(rejection_count, 0) + 1, 
+//             last_rejection_reason = $1 
+//         WHERE id = $2 
+//         RETURNING *;
+//       `;
+//       queryParams = [rejection_reason || 'No specific reason given.', id];
+//     }
+
+//     const updateResult = await pool.query(updateQuery, queryParams);
+//     otpStore.delete(pendingKey);
+
+//     // return res.json({ success: true, complaint: updateResult.rows[0] });
+//     const updatedComplaint = updateResult.rows[0];
+
+//     // SEND REJECTION EMAIL TO CARETAKER
+//     if (!approved && updatedComplaint) {
+//       try {
+//         const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
+//         await transporter.sendMail({
+//           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//           to: caretakerEmail,
+//           subject: `⚠️ Issue #${id} Fix Rejected by Student (${updatedComplaint.hostel_name})`,
+//           // text: `The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has REJECTED the fix for Issue #${id}.\n\nReason: "${rejection_reason || 'No specific reason given.'}"\n\nThe issue status has been reopened to 'Pending'.`
+//           html: `
+//           <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//             <h2 style="color: #c0392b; margin-top: 0;">⚠️ Resolution Rejected by Student</h2>
+//             <p style="color: #555; font-size: 14px;">The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has <strong>rejected</strong> the fix provided for <strong>Issue #${id}</strong>.</p>
+            
+//             <div style="background: #fdf2e9; border-left: 4px solid #e67e22; padding: 12px; margin: 15px 0; font-size: 14px; color: #a04000;">
+//               <strong>Student Reason:</strong> "${rejection_reason || 'No specific reason given.'}"
+//             </div>
+
+//             <p style="color: #555; font-size: 13px;">The issue status has been reset to <strong>Pending</strong>. Please inspect and resolve the issue.</p>
+//           </div>
+//         `
+//         });
+//       } catch (mailErr) {
+//         console.error("Failed to send caretaker rejection notification:", mailErr);
+//       }
+//     }
+
+//     return res.json({ success: true, complaint: updatedComplaint });
+
+
+//   } catch (err) {
+//     console.error("Error in verify-otp:", err);
+//     return res.status(500).json({ error: err.message || "Failed to process verification" });
+//   }
+// });
+
 // =================================================================
-// 5. STUDENT VERIFICATION / REJECTION: SEND OTP
+// 4. STUDENT DIRECT VERIFICATION / REJECTION (NO OTP REQUIRED)
 // =================================================================
-app.post('/api/complaints/send-otp/:id', async (req, res) => {
+app.post('/api/complaints/verify-direct/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { purpose } = req.body;
-
-    const complaintRes = await pool.query('SELECT * FROM complaints WHERE id = $1', [id]);
-    if (complaintRes.rows.length === 0) {
-      return res.status(404).json({ error: "Complaint not found" });
-    }
-
-    const complaint = complaintRes.rows[0];
-    const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
-    const otp = generateOTP();
-
-    otpStore.set(`student_confirm_${id}`, {
-      otp,
-      purpose,
-      expiresAt: Date.now() + 5 * 60 * 1000
-    });
-
-
-    // Helper Variables Defined First
-    const actionLabel = purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix';
-    const actionDesc = purpose === 'verify' ? 'confirm resolution for' : 'reject resolution for';
-    const accentColor = purpose === 'verify' ? '#27ae60' : '#c0392b';
-    const accentBg = purpose === 'verify' ? '#e8f8f5' : '#fdf2e9';
-
-    await transporter.sendMail({
-      from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
-      to: studentEmail,
-      subject: `🔑 OTP to ${purpose === 'verify' ? 'Confirm Fix' : 'Reject Fix'} for Issue #${id}`,
-      // text: `Your OTP to ${purpose === 'verify' ? 'confirm resolution' : 'reject resolution'} for Issue #${id} is: ${otp}`
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
-          <p style="color: #555; font-size: 14px;">Dear Student,</p>
-          <p style="color: #555; font-size: 14px;">Use the following One-Time Password (OTP) to <strong>${actionDesc} Issue #${id}</strong> (${complaint.hostel_name}):</p>
-          
-          <div style="text-align: center; margin: 25px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: ${accentColor}; background: ${accentBg}; padding: 10px 20px; border-radius: 6px; border: 1px dashed ${accentColor}; display: inline-block;">${otp}</span>
-          </div>
-          
-          <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>. Do not share this code with anyone.</p>
-          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-          <p style="color: #95a5a6; font-size: 12px; margin: 0;">This is an automated notification from the Hostel Maintenance Portal.</p>
-        </div>
-      `
-    });
-
-    return res.json({ success: true, emailSentTo: studentEmail });
-  } catch (err) {
-    console.error("Error in send-otp:", err);
-    return res.status(500).json({ error: err.message || "Failed to send OTP" });
-  }
-});
-
-// =================================================================
-// 6. STUDENT VERIFICATION / REJECTION: VERIFY OTP
-// =================================================================
-app.post('/api/complaints/verify-otp/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { userOtp, approved, rejection_reason } = req.body;
-
-    const pendingKey = `student_confirm_${id}`;
-    const pending = otpStore.get(pendingKey);
-
-    if (!pending || pending.expiresAt < Date.now()) {
-      return res.status(400).json({ error: "OTP expired or invalid" });
-    }
-
-    if (pending.otp !== String(userOtp).trim()) {
-      return res.status(400).json({ error: "Invalid OTP" });
-    }
+    const { approved, rejection_reason } = req.body;
 
     let updateQuery = '';
     let queryParams = [];
@@ -7115,12 +7311,14 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
     }
 
     const updateResult = await pool.query(updateQuery, queryParams);
-    otpStore.delete(pendingKey);
+    
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: "Complaint not found" });
+    }
 
-    // return res.json({ success: true, complaint: updateResult.rows[0] });
     const updatedComplaint = updateResult.rows[0];
 
-    // SEND REJECTION EMAIL TO CARETAKER
+    // SEND REJECTION EMAIL TO CARETAKER IF REJECTED
     if (!approved && updatedComplaint) {
       try {
         const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
@@ -7128,7 +7326,6 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
           to: caretakerEmail,
           subject: `⚠️ Issue #${id} Fix Rejected by Student (${updatedComplaint.hostel_name})`,
-          // text: `The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has REJECTED the fix for Issue #${id}.\n\nReason: "${rejection_reason || 'No specific reason given.'}"\n\nThe issue status has been reopened to 'Pending'.`
           html: `
           <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
             <h2 style="color: #c0392b; margin-top: 0;">⚠️ Resolution Rejected by Student</h2>
@@ -7149,12 +7346,12 @@ app.post('/api/complaints/verify-otp/:id', async (req, res) => {
 
     return res.json({ success: true, complaint: updatedComplaint });
 
-
   } catch (err) {
-    console.error("Error in verify-otp:", err);
+    console.error("Error in verify-direct:", err);
     return res.status(500).json({ error: err.message || "Failed to process verification" });
   }
 });
+
 
 // =================================================================
 // 7. GET COMPLAINTS (WITH HOSTEL FILTER)
