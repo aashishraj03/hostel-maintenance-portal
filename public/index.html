@@ -14,14 +14,114 @@
     .form-group { margin-bottom: 15px; }
     label { display: block; margin-bottom: 5px; font-weight: bold; }
     input, select, textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; }
-    
-    .role-bar { display: flex; background: #e2e8f0; border-radius: 8px; padding: 4px; margin-bottom: 20px; }
-    .role-btn { flex: 1; padding: 10px; text-align: center; font-weight: bold; cursor: pointer; border-radius: 6px; border: none; background: transparent; color: #475569; }
-    .role-btn.active { background: #2c3e50; color: white; }
+
+    /* --- LANDING PAGE STYLES --- */
+    .landing-card {
+      position: relative;
+      background: #ffffff;
+      padding: 55px 35px 45px 35px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      text-align: center;
+      max-width: 580px;
+      margin: 40px auto;
+      overflow: hidden;
+    }
+
+    /* Faded IIT Delhi Watermark Background */
+    .landing-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url('https://upload.wikimedia.org/wikipedia/en/f/fd/Indian_Institute_of_Technology_Delhi_Logo.svg');
+      background-repeat: no-repeat;
+      background-position: center 30%;
+      background-size: 450px;
+      opacity: 0.07;
+      pointer-events: none;
+    }
+
+    /* Bigger Headline */
+    .landing-title { 
+      color: #2c3e50; 
+      margin-bottom: 8px; 
+      font-size: 2.3em;
+      font-weight: 800;
+      position: relative; 
+      z-index: 1;
+    }
+
+    .landing-subtitle { 
+      color: #64748b; 
+      margin-bottom: 25px; 
+      font-size: 1.05em; 
+      font-weight: 600;
+      position: relative; 
+      z-index: 1;
+    }
+
+    /* Buttons Shifted Down */
+    .role-options-container { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 14px; 
+      position: relative; 
+      z-index: 1;
+      margin-top: 35px;
+    }
+
+    .role-option-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 22px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      color: #1e293b;
+      font-size: 1.05em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    }
+
+    .role-option-btn:hover {
+      background: #2c3e50;
+      color: #ffffff;
+      border-color: #2c3e50;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .back-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+    .back-btn { background: #64748b; color: #ffffff; padding: 6px 14px; border-radius: 5px; font-size: 0.85em; border: none; cursor: pointer; }
+    .back-btn:hover { background: #475569; }
 
     .filter-bar { background: #2c3e50; color: white; padding: 15px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
     .filter-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .filter-controls input, .filter-controls select { width: auto; background: white; color: #333; font-weight: bold; }
+
+    .filter-btn { background: #cbd5e1; color: #334155; padding: 8px 12px; border-radius: 4px; font-weight: bold; border: none; cursor: pointer; }
+    .filter-btn.active { background: #2563eb; color: white; }
+
+    /* Custom styling for Caretaker Dropdown Button */
+    .caretaker-dropdown-select {
+      font-size: 1.08em;
+      padding: 12px 14px;
+      border: 2px solid #2980b9;
+      border-radius: 6px;
+      font-weight: bold;
+      color: #1b4f72;
+      background-color: #ffffff;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .caretaker-dropdown-select:hover {
+      border-color: #1b4f72;
+      background-color: #f4faff;
+    }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
     
@@ -59,115 +159,174 @@
 <body>
 
 <div class="container">
-  <h1>Campus Maintenance Portal</h1>
 
-  <!-- Mode Switcher -->
-  <div class="role-bar">
-    <button class="role-btn active" id="studentTabBtn" onclick="switchRole('student')">Student Portal</button>
-    <button class="role-btn" id="caretakerTabBtn" onclick="switchRole('caretaker')">Caretaker / Warden Portal</button>
-  </div>
+  <!-- FIRST LANDING PAGE CARD -->
+  <div class="landing-card" id="landingPage">
+    <h1 class="landing-title">Campus Maintenance Portal</h1>
+    <p class="landing-subtitle">Indian Institute of Technology Delhi</p>
 
-  <!-- Student Report Form with Two-Step OTP Verification -->
-  <div class="card" id="studentFormCard">
-    <h2>Report an Issue (Student)</h2>
-    <form id="complaintForm" onsubmit="initiateSubmissionOtp(event)">
-      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <div class="form-group" style="flex: 1; min-width: 180px;">
-          <label>Select Hostel</label>
-          <select id="sub_hostel" name="hostel_name" required>
-            <option value="" disabled selected>-- Select Your Hostel --</option>
-            <option value="Aravali">Aravali</option>
-            <option value="Dronagiri">Dronagiri</option>
-            <option value="Girnar">Girnar</option>
-            <option value="Himadri">Himadri</option>
-            <option value="Jwala">Jwala</option>
-            <option value="Kailash">Kailash</option>
-            <option value="Karakoram">Karakoram</option>
-            <option value="Kumaon">Kumaon</option>
-            <option value="Nilgiri">Nilgiri</option>
-            <option value="Sahyadri">Sahyadri</option>
-            <option value="Saptagiri">Saptagiri</option>
-            <option value="Satpura">Satpura</option>
-            <option value="Shivalik">Shivalik</option>
-            <option value="Udaigiri">Udaigiri</option>
-            <option value="Vindhyachal">Vindhyachal</option>
-            <option value="Zanskar">Zanskar</option>
-          </select>
-        </div>
-        <div class="form-group" style="flex: 1; min-width: 180px;">
-          <label>Kerberos ID</label>
-          <input type="text" id="sub_kerberos" name="kerberos_id" placeholder="e.g. ce1230456" required>
-        </div>
-        <div class="form-group" style="flex: 1; min-width: 150px;">
-          <label>Category</label>
-          <select id="sub_category" name="category" required>
-            <option value="Plumbing">Plumbing</option>
-            <option value="Electrical">Electrical</option>
-            <option value="Furniture">Furniture</option>
-            <option value="Appliance">Appliance</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Description of Issue</label>
-        <textarea id="sub_description" name="description" rows="2" placeholder="Describe the maintenance problem..." required></textarea>
-      </div>
-      <div class="form-group">
-        <label>Upload Photo of Issue</label>
-        <input type="file" id="sub_photo" name="issue_photo" accept="image/*" required>
-      </div>
+    <div class="role-options-container">
+      <button class="role-option-btn" onclick="selectRole('student')">
+        <span>🎓 I'm a Student</span>
+        <span>→</span>
+      </button>
 
-      <!-- Step 1 Button -->
-      <div id="submitStep1">
-        <button type="submit" id="requestSubOtpBtn">Send OTP to Submit Complaint</button>
-      </div>
+      <button class="role-option-btn" onclick="selectRole('caretaker')">
+        <span>🛠️ Caretaker Login</span>
+        <span>→</span>
+      </button>
 
-      <!-- Step 2 Input -->
-      <div id="submitStep2" style="display:none; margin-top:10px; background:#e8f5e9; padding:15px; border-radius:6px; border:1px solid #c8e6c9;">
-        <label style="color:#2e7d32;">Enter 6-Digit OTP sent to your Kerberos Email:</label>
-        <input type="text" id="sub_otp_input" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
-        <div style="display:flex; gap:10px;">
-          <button type="button" onclick="confirmSubmissionOtp()" style="flex:1;">Verify OTP & Post Complaint</button>
-          <button type="button" onclick="resetSubmissionForm()" style="background:#7f8c8d; flex:1;">Cancel</button>
-        </div>
-      </div>
-    </form>
-  </div>
-
-  <!-- Filter Bar -->
-  <div class="filter-bar">
-    <div>
-      <h3 style="margin: 0;" id="dashboardTitle">Student Feed</h3>
-      <small style="color: #cbd5e1;">Search or filter by hostel</small>
-    </div>
-    <div class="filter-controls">
-      <input type="text" id="hostelSearch" placeholder="🔍 Type hostel name..." oninput="filterBySearch()" style="padding: 8px 12px;">
-      
-      <select id="hostelFilter" onchange="syncSearchAndLoad()">
-        <option value="ALL">All Hostels</option>
-        <option value="Aravali">Aravali</option>
-        <option value="Dronagiri">Dronagiri</option>
-        <option value="Girnar">Girnar</option>
-        <option value="Himadri">Himadri</option>
-        <option value="Jwala">Jwala</option>
-        <option value="Kailash">Kailash</option>
-        <option value="Karakoram">Karakoram</option>
-        <option value="Kumaon">Kumaon</option>
-        <option value="Nilgiri">Nilgiri</option>
-        <option value="Sahyadri">Sahyadri</option>
-        <option value="Saptagiri">Saptagiri</option>
-        <option value="Satpura">Satpura</option>
-        <option value="Shivalik">Shivalik</option>
-        <option value="Udaigiri">Udaigiri</option>
-        <option value="Vindhyachal">Vindhyachal</option>
-        <option value="Zanskar">Zanskar</option>
-      </select>
+      <button class="role-option-btn" onclick="selectRole('admin')">
+        <span>🔑 Admin Login</span>
+        <span>→</span>
+      </button>
     </div>
   </div>
 
-  <!-- Complaints Grid Feed -->
-  <div class="grid" id="complaintsList"></div>
+  <!-- MAIN PORTAL DASHBOARD (Hidden until an option is picked) -->
+  <div id="mainPortalContent" style="display: none;">
+    <div class="back-bar">
+      <button class="back-btn" onclick="showLandingPage()">← Back to Main Menu</button>
+      <span id="activeRoleTag" style="font-weight: bold; color: #2c3e50; font-size: 0.9em;"></span>
+    </div>
+
+    <h1>Campus Maintenance Portal</h1>
+
+    <!-- Caretaker Hostel Selection Card (Visible only in Caretaker Mode) -->
+    <div class="card" id="caretakerHostelSelectCard" style="display: none; background: #ebf5fb; border: 1px solid #b3e5fc;">
+      <h2 style="margin-top: 0; color: #2980b9;">🛠️ Caretaker Portal Access</h2>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label style="color: #1b4f72; font-size: 1em; margin-bottom: 8px;">Select Your Assigned Hostel to View & Manage Issues:</label>
+        <select id="caretaker_hostel_dropdown" class="caretaker-dropdown-select" onchange="onCaretakerHostelSelect(this.value)">
+          <option value="" disabled selected>-- Select Hostel --</option>
+          <option value="Aravali">Aravali</option>
+          <option value="Dronagiri">Dronagiri</option>
+          <option value="Girnar">Girnar</option>
+          <option value="Himadri">Himadri</option>
+          <option value="Jwala">Jwala</option>
+          <option value="Kailash">Kailash</option>
+          <option value="Karakoram">Karakoram</option>
+          <option value="Kumaon">Kumaon</option>
+          <option value="Nilgiri">Nilgiri</option>
+          <option value="Sahyadri">Sahyadri</option>
+          <option value="Saptagiri">Saptagiri</option>
+          <option value="Satpura">Satpura</option>
+          <option value="Shivalik">Shivalik</option>
+          <option value="Udaigiri">Udaigiri</option>
+          <option value="Vindhyachal">Vindhyachal</option>
+          <option value="Zanskar">Zanskar</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Student Report Form with Two-Step OTP Verification (Visible only in Student Mode) -->
+    <div class="card" id="studentFormCard">
+      <h2>Report an Issue (Student)</h2>
+      <form id="complaintForm" onsubmit="initiateSubmissionOtp(event)">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div class="form-group" style="flex: 1; min-width: 180px;">
+            <label>Select Hostel</label>
+            <select id="sub_hostel" name="hostel_name" required>
+              <option value="" disabled selected>-- Select Your Hostel --</option>
+              <option value="Aravali">Aravali</option>
+              <option value="Dronagiri">Dronagiri</option>
+              <option value="Girnar">Girnar</option>
+              <option value="Himadri">Himadri</option>
+              <option value="Jwala">Jwala</option>
+              <option value="Kailash">Kailash</option>
+              <option value="Karakoram">Karakoram</option>
+              <option value="Kumaon">Kumaon</option>
+              <option value="Nilgiri">Nilgiri</option>
+              <option value="Sahyadri">Sahyadri</option>
+              <option value="Saptagiri">Saptagiri</option>
+              <option value="Satpura">Satpura</option>
+              <option value="Shivalik">Shivalik</option>
+              <option value="Udaigiri">Udaigiri</option>
+              <option value="Vindhyachal">Vindhyachal</option>
+              <option value="Zanskar">Zanskar</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 180px;">
+            <label>Kerberos ID</label>
+            <input type="text" id="sub_kerberos" name="kerberos_id" placeholder="e.g. ce1230456" required oninput="loadComplaints()">
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 150px;">
+            <label>Category</label>
+            <select id="sub_category" name="category" required>
+              <option value="Plumbing">Plumbing</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Furniture">Furniture</option>
+              <option value="Appliance">Appliance</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description of Issue</label>
+          <textarea id="sub_description" name="description" rows="2" placeholder="Describe the maintenance problem..." required></textarea>
+        </div>
+        <div class="form-group">
+          <label>Upload Photo of Issue</label>
+          <input type="file" id="sub_photo" name="issue_photo" accept="image/*" required>
+        </div>
+
+        <!-- Step 1 Button -->
+        <div id="submitStep1">
+          <button type="submit" id="requestSubOtpBtn">Send OTP to Submit Complaint</button>
+        </div>
+
+        <!-- Step 2 Input -->
+        <div id="submitStep2" style="display:none; margin-top:10px; background:#e8f5e9; padding:15px; border-radius:6px; border:1px solid #c8e6c9;">
+          <label style="color:#2e7d32;">Enter 6-Digit OTP sent to your Kerberos Email:</label>
+          <input type="text" id="sub_otp_input" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
+          <div style="display:flex; gap:10px;">
+            <button type="button" onclick="confirmSubmissionOtp()" style="flex:1;">Verify OTP & Post Complaint</button>
+            <button type="button" onclick="resetSubmissionForm()" style="background:#7f8c8d; flex:1;">Cancel</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <div>
+        <h3 style="margin: 0;" id="dashboardTitle">Student Feed</h3>
+        <small style="color: #cbd5e1;">Search or filter by hostel</small>
+      </div>
+      <div class="filter-controls">
+        <!-- My Issues Filter Toggle (Student Only) -->
+        <button type="button" class="filter-btn active" id="myIssuesToggleBtn" onclick="toggleMyIssuesFilter()">
+          👤 My Issues
+        </button>
+
+        <input type="text" id="hostelSearch" placeholder="🔍 Type hostel name..." oninput="filterBySearch()" style="padding: 8px 12px;">
+        
+        <select id="hostelFilter" onchange="syncSearchAndLoad()">
+          <option value="ALL">All Hostels</option>
+          <option value="Aravali">Aravali</option>
+          <option value="Dronagiri">Dronagiri</option>
+          <option value="Girnar">Girnar</option>
+          <option value="Himadri">Himadri</option>
+          <option value="Jwala">Jwala</option>
+          <option value="Kailash">Kailash</option>
+          <option value="Karakoram">Karakoram</option>
+          <option value="Kumaon">Kumaon</option>
+          <option value="Nilgiri">Nilgiri</option>
+          <option value="Sahyadri">Sahyadri</option>
+          <option value="Saptagiri">Saptagiri</option>
+          <option value="Satpura">Satpura</option>
+          <option value="Shivalik">Shivalik</option>
+          <option value="Udaigiri">Udaigiri</option>
+          <option value="Vindhyachal">Vindhyachal</option>
+          <option value="Zanskar">Zanskar</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Complaints Grid Feed -->
+    <div class="grid" id="complaintsList"></div>
+  </div>
+
 </div>
 
 <!-- Lightbox Modal -->
@@ -178,13 +337,64 @@
 <script>
   let currentRole = 'student';
   let activeSubmissionTempId = null;
+  let filterMyIssuesOnly = true;
+  let selectedCaretakerHostel = "";
+
+  function selectRole(role) {
+    document.getElementById('landingPage').style.display = 'none';
+    document.getElementById('mainPortalContent').style.display = 'block';
+
+    const roleTag = document.getElementById('activeRoleTag');
+
+    if (role === 'student') {
+      roleTag.innerText = 'Mode: Student Portal';
+      switchRole('student');
+    } else if (role === 'caretaker') {
+      roleTag.innerText = 'Mode: Caretaker Portal';
+      switchRole('caretaker');
+    } else if (role === 'admin') {
+      roleTag.innerText = 'Mode: Admin Portal';
+      alert('Admin Login selected.');
+    }
+  }
+
+  function showLandingPage() {
+    document.getElementById('landingPage').style.display = 'block';
+    document.getElementById('mainPortalContent').style.display = 'none';
+  }
+
+  function toggleMyIssuesFilter() {
+    filterMyIssuesOnly = !filterMyIssuesOnly;
+    const btn = document.getElementById('myIssuesToggleBtn');
+    btn.classList.toggle('active', filterMyIssuesOnly);
+    loadComplaints();
+  }
 
   function switchRole(role) {
     currentRole = role;
-    document.getElementById('studentTabBtn').classList.toggle('active', role === 'student');
-    document.getElementById('caretakerTabBtn').classList.toggle('active', role === 'caretaker');
+
+    // View Switching
     document.getElementById('studentFormCard').style.display = (role === 'student') ? 'block' : 'none';
+    document.getElementById('myIssuesToggleBtn').style.display = (role === 'student') ? 'inline-block' : 'none';
+    document.getElementById('caretakerHostelSelectCard').style.display = (role === 'caretaker') ? 'block' : 'none';
+    
+    // Hide standard filter bar controls in Caretaker mode
+    document.querySelector('.filter-bar').style.display = (role === 'student') ? 'flex' : 'none';
+
     document.getElementById('dashboardTitle').innerText = (role === 'student') ? 'Student Feed' : 'Caretaker Action Dashboard';
+    
+    // Reset caretaker dropdown selection when switching role
+    if (role === 'caretaker') {
+      selectedCaretakerHostel = "";
+      document.getElementById('caretaker_hostel_dropdown').value = "";
+    }
+
+    loadComplaints();
+  }
+
+  function onCaretakerHostelSelect(hostel) {
+    selectedCaretakerHostel = hostel;
+    document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
     loadComplaints();
   }
 
@@ -353,16 +563,31 @@
   }
 
   async function loadComplaints(searchQuery = '') {
-    const selectedHostel = document.getElementById('hostelFilter').value;
-    const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(selectedHostel)}`);
-    let data = await res.json();
-
-    if (searchQuery && selectedHostel === 'ALL') {
-      data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));
-    }
-    
     const container = document.getElementById('complaintsList');
     container.innerHTML = '';
+
+    // If in Caretaker Mode and no hostel selected yet, keep feed empty silently
+    if (currentRole === 'caretaker' && !selectedCaretakerHostel) {
+      return;
+    }
+
+    // Determine target hostel
+    let activeHostel = (currentRole === 'student') ? document.getElementById('hostelFilter').value : selectedCaretakerHostel;
+
+    const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}`);
+    let data = await res.json();
+
+    if (searchQuery && activeHostel === 'ALL') {
+      data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));
+    }
+
+    // --- STUDENT "MY ISSUES" FILTERING ---
+    if (currentRole === 'student' && filterMyIssuesOnly) {
+      const currentKerberos = document.getElementById('sub_kerberos').value.trim().toLowerCase();
+      if (currentKerberos) {
+        data = data.filter(item => item.kerberos_id && item.kerberos_id.trim().toLowerCase() === currentKerberos);
+      }
+    }
 
     if (data.length === 0) {
       container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 8px; color: #777;">No complaints found.</div>`;
@@ -382,9 +607,6 @@
       if (isVerifying) badgeClass += ' verifying';
       if (isResolved) badgeClass += ' resolved';
 
-      // const issuePhotoSrc = item.issue_photo.startsWith('http') ? item.issue_photo : `/uploads/issues/${item.issue_photo}`;
-      // const fixPhotoSrc = item.fix_photo ? (item.fix_photo.startsWith('http') ? item.fix_photo : `/uploads/fixes/${item.fix_photo}`) : null;
-
       const issuePhotoSrc = (item.issue_photo && (item.issue_photo.startsWith('http') || item.issue_photo.startsWith('data:'))) 
         ? item.issue_photo 
         : `/uploads/issues/${item.issue_photo}`;
@@ -392,7 +614,6 @@
       const fixPhotoSrc = (item.fix_photo && (item.fix_photo.startsWith('http') || item.fix_photo.startsWith('data:'))) 
         ? item.fix_photo 
         : (item.fix_photo ? `/uploads/fixes/${item.fix_photo}` : null);
-
 
       let fixImageHtml = '';
       if (fixPhotoSrc) {
@@ -589,8 +810,6 @@
       alert(data.error || 'Verification failed.');
     }
   }
-
-  loadComplaints();
 </script>
 
 </body>
