@@ -192,34 +192,49 @@
 
     <h1>Campus Maintenance Portal</h1>
 
-    <!-- Caretaker Hostel Selection Card (Visible only in Caretaker Mode) -->
+    <!-- Caretaker Hostel & OTP Login Card -->
     <div class="card" id="caretakerHostelSelectCard" style="display: none; background: #ebf5fb; border: 1px solid #b3e5fc;">
-      <h2 style="margin-top: 0; color: #2980b9;">🛠️ Caretaker Portal Access</h2>
-      <div class="form-group" style="margin-bottom: 0;">
-        <label style="color: #1b4f72; font-size: 1em; margin-bottom: 8px;">Select Your Assigned Hostel to View & Manage Issues:</label>
-        <select id="caretaker_hostel_dropdown" class="caretaker-dropdown-select" onchange="onCaretakerHostelSelect(this.value)">
-          <option value="" disabled selected>-- Select Hostel --</option>
-          <option value="Aravali">Aravali</option>
-          <option value="Dronagiri">Dronagiri</option>
-          <option value="Girnar">Girnar</option>
-          <option value="Himadri">Himadri</option>
-          <option value="Jwala">Jwala</option>
-          <option value="Kailash">Kailash</option>
-          <option value="Karakoram">Karakoram</option>
-          <option value="Kumaon">Kumaon</option>
-          <option value="Nilgiri">Nilgiri</option>
-          <option value="Sahyadri">Sahyadri</option>
-          <option value="Saptagiri">Saptagiri</option>
-          <option value="Satpura">Satpura</option>
-          <option value="Shivalik">Shivalik</option>
-          <option value="Udaigiri">Udaigiri</option>
-          <option value="Vindhyachal">Vindhyachal</option>
-          <option value="Zanskar">Zanskar</option>
-        </select>
+      <h2 style="margin-top: 0; color: #2980b9;">🛠️ Caretaker Portal Verification</h2>
+      
+      <!-- Step 1: Select Hostel -->
+      <div id="ctLoginStep1">
+        <div class="form-group">
+          <label style="color: #1b4f72; font-size: 1em; margin-bottom: 8px;">Select Your Assigned Hostel:</label>
+          <select id="caretaker_hostel_dropdown" class="caretaker-dropdown-select">
+            <option value="" disabled selected>-- Select Hostel --</option>
+            <option value="Aravali">Aravali</option>
+            <option value="Dronagiri">Dronagiri</option>
+            <option value="Girnar">Girnar</option>
+            <option value="Himadri">Himadri</option>
+            <option value="Jwala">Jwala</option>
+            <option value="Kailash">Kailash</option>
+            <option value="Karakoram">Karakoram</option>
+            <option value="Kumaon">Kumaon</option>
+            <option value="Nilgiri">Nilgiri</option>
+            <option value="Sahyadri">Sahyadri</option>
+            <option value="Saptagiri">Saptagiri</option>
+            <option value="Satpura">Satpura</option>
+            <option value="Shivalik">Shivalik</option>
+            <option value="Udaigiri">Udaigiri</option>
+            <option value="Vindhyachal">Vindhyachal</option>
+            <option value="Zanskar">Zanskar</option>
+          </select>
+        </div>
+        <button onclick="requestCaretakerLoginOtp()" id="ctLoginOtpBtn" style="background: #2980b9; padding: 10px 18px;">Send Verification OTP to Webmail</button>
+      </div>
+
+      <!-- Step 2: Enter OTP -->
+      <div id="ctLoginStep2" style="display: none; margin-top: 10px; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #b3e5fc;">
+        <label id="ctOtpLabel" style="color: #0277bd; font-weight: bold;">Enter 6-Digit OTP sent to Caretaker Webmail:</label>
+        <input type="text" id="ct_login_otp_input" maxlength="6" placeholder="123456" style="margin: 8px 0 12px 0;">
+        <div style="display: flex; gap: 10px;">
+          <button onclick="verifyCaretakerLoginOtp()" style="flex: 1; background: #0288d1;">Verify OTP & Unlock Dashboard</button>
+          <button onclick="resetCaretakerLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
+        </div>
       </div>
     </div>
 
-    <!-- Student Report Form with Two-Step OTP Verification (Visible only in Student Mode) -->
+    <!-- Student Report Form -->
     <div class="card" id="studentFormCard">
       <h2>Report an Issue (Student)</h2>
       <form id="complaintForm" onsubmit="initiateSubmissionOtp(event)">
@@ -294,7 +309,6 @@
         <small style="color: #cbd5e1;">Search or filter by hostel</small>
       </div>
       <div class="filter-controls">
-        <!-- My Issues Filter Toggle (Student Only) -->
         <button type="button" class="filter-btn active" id="myIssuesToggleBtn" onclick="toggleMyIssuesFilter()">
           👤 My Issues
         </button>
@@ -339,6 +353,7 @@
   let activeSubmissionTempId = null;
   let filterMyIssuesOnly = true;
   let selectedCaretakerHostel = "";
+  let isCaretakerVerified = false;
 
   function selectRole(role) {
     document.getElementById('landingPage').style.display = 'none';
@@ -373,29 +388,134 @@
   function switchRole(role) {
     currentRole = role;
 
-    // View Switching
     document.getElementById('studentFormCard').style.display = (role === 'student') ? 'block' : 'none';
     document.getElementById('myIssuesToggleBtn').style.display = (role === 'student') ? 'inline-block' : 'none';
     document.getElementById('caretakerHostelSelectCard').style.display = (role === 'caretaker') ? 'block' : 'none';
     
-    // Hide standard filter bar controls in Caretaker mode
     document.querySelector('.filter-bar').style.display = (role === 'student') ? 'flex' : 'none';
-
     document.getElementById('dashboardTitle').innerText = (role === 'student') ? 'Student Feed' : 'Caretaker Action Dashboard';
     
-    // Reset caretaker dropdown selection when switching role
     if (role === 'caretaker') {
-      selectedCaretakerHostel = "";
-      document.getElementById('caretaker_hostel_dropdown').value = "";
+      resetCaretakerLogin();
     }
 
     loadComplaints();
   }
 
-  function onCaretakerHostelSelect(hostel) {
-    selectedCaretakerHostel = hostel;
-    document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
-    loadComplaints();
+  // --- CARETAKER PORTAL VERIFICATION VIA OTP ---
+  async function requestCaretakerLoginOtp() {
+    const hostel = document.getElementById('caretaker_hostel_dropdown').value;
+    if (!hostel) {
+      alert('Please select a hostel first.');
+      return;
+    }
+
+    const btn = document.getElementById('ctLoginOtpBtn');
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP...';
+
+    try {
+      const res = await fetch('/api/caretaker/request-login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostel_name: hostel })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`OTP sent to Caretaker Webmail (${data.emailSentTo})!`);
+        document.getElementById('ctLoginStep1').style.display = 'none';
+        document.getElementById('ctLoginStep2').style.display = 'block';
+        document.getElementById('ctOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
+      } else {
+        alert(data.error || 'Failed to send login OTP.');
+        btn.disabled = false;
+        btn.innerText = 'Send Verification OTP to Webmail';
+      }
+    } catch (err) {
+      alert('Network error while requesting login OTP.');
+      btn.disabled = false;
+      btn.innerText = 'Send Verification OTP to Webmail';
+    }
+  }
+
+  async function verifyCaretakerLoginOtp() {
+    const hostel = document.getElementById('caretaker_hostel_dropdown').value;
+    const userOtp = document.getElementById('ct_login_otp_input').value;
+
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch('/api/caretaker/verify-login-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostel_name: hostel, userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`Verified! Caretaker access unlocked for ${hostel} Hostel.`);
+      selectedCaretakerHostel = hostel;
+      isCaretakerVerified = true;
+      document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
+      document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      loadComplaints();
+    } else {
+      alert(data.error || 'Invalid OTP.');
+    }
+  }
+
+  function resetCaretakerLogin() {
+    selectedCaretakerHostel = "";
+    isCaretakerVerified = false;
+    document.getElementById('caretaker_hostel_dropdown').value = "";
+    document.getElementById('ctLoginStep1').style.display = 'block';
+    document.getElementById('ctLoginStep2').style.display = 'none';
+    const btn = document.getElementById('ctLoginOtpBtn');
+    btn.disabled = false;
+    btn.innerText = 'Send Verification OTP to Webmail';
+  }
+
+  // --- CARETAKER DIRECT FIX SUBMISSION ---
+  async function submitCaretakerFixDirect(event, id) {
+    event.preventDefault();
+    const btn = document.getElementById(`caretaker-sub-btn-${id}`);
+    const fileInput = document.getElementById(`fix_photo-${id}`);
+
+    if (!fileInput.files[0]) {
+      alert('Please select a proof photo.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = 'Submitting Proof... Please wait';
+
+    const formData = new FormData();
+    formData.append('fix_photo', fileInput.files[0]);
+
+    try {
+      const res = await fetch(`/api/complaints/submit-fix/${id}`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert('Resolution proof submitted successfully! Awaiting student verification.');
+        loadComplaints();
+      } else {
+        alert(data.error || 'Failed to submit fix.');
+        btn.disabled = false;
+        btn.innerText = 'Submit Resolution Proof';
+      }
+    } catch (err) {
+      alert('Network error while submitting fix.');
+      btn.disabled = false;
+      btn.innerText = 'Submit Resolution Proof';
+    }
   }
 
   function openLightbox(src) {
@@ -497,81 +617,14 @@
     activeSubmissionTempId = null;
   }
 
-  // --- CARETAKER FIX SUBMISSION OTP ---
-  async function requestCaretakerFixOtp(event, id) {
-    event.preventDefault();
-    const btn = document.getElementById(`caretaker-sub-btn-${id}`);
-    const fileInput = document.getElementById(`fix_photo-${id}`);
-    const action_type = document.getElementById(`action_type-${id}`).value;
-
-    if (!fileInput.files[0]) {
-      alert('Please select a proof photo.');
-      return;
-    }
-
-    btn.disabled = true;
-    btn.innerText = 'Sending OTP... Please wait';
-
-    const formData = new FormData();
-    formData.append('action_type', action_type);
-    formData.append('fix_photo', fileInput.files[0]);
-
-    try {
-      const res = await fetch(`/api/complaints/request-caretaker-otp/${id}`, {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        alert(`An OTP has been sent to Caretaker Webmail (${data.emailSentTo})!`);
-        document.getElementById(`caretaker-step-1-${id}`).style.display = 'none';
-        document.getElementById(`caretaker-step-2-${id}`).style.display = 'block';
-      } else {
-        alert(data.error || 'Failed to request Caretaker OTP.');
-        btn.disabled = false;
-        btn.innerText = 'Send OTP to Verify & Submit Fix';
-      }
-    } catch (err) {
-      alert('Network error while requesting Caretaker OTP.');
-      btn.disabled = false;
-      btn.innerText = 'Send OTP to Verify & Submit Fix';
-    }
-  }
-
-  async function confirmCaretakerFixOtp(id) {
-    const userOtp = document.getElementById(`caretaker_otp_input-${id}`).value;
-    if (!userOtp || userOtp.length !== 6) {
-      alert('Please enter a valid 6-digit OTP.');
-      return;
-    }
-
-    const res = await fetch(`/api/complaints/verify-caretaker-otp/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userOtp })
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert('Caretaker fix verified and submitted for student confirmation!');
-      loadComplaints();
-    } else {
-      alert(data.error || 'Verification failed.');
-    }
-  }
-
   async function loadComplaints(searchQuery = '') {
     const container = document.getElementById('complaintsList');
     container.innerHTML = '';
 
-    // If in Caretaker Mode and no hostel selected yet, keep feed empty silently
-    if (currentRole === 'caretaker' && !selectedCaretakerHostel) {
+    if (currentRole === 'caretaker' && !isCaretakerVerified) {
       return;
     }
 
-    // Determine target hostel
     let activeHostel = (currentRole === 'student') ? document.getElementById('hostelFilter').value : selectedCaretakerHostel;
 
     const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}`);
@@ -581,7 +634,6 @@
       data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));
     }
 
-    // --- STUDENT "MY ISSUES" FILTERING ---
     if (currentRole === 'student' && filterMyIssuesOnly) {
       const currentKerberos = document.getElementById('sub_kerberos').value.trim().toLowerCase();
       if (currentKerberos) {
@@ -640,35 +692,18 @@
         if (isPending) {
           actionAreaHtml = `
             <div class="action-box">
-              <h4 style="margin: 0 0 8px 0;">Caretaker Fix Action</h4>
-              
-              <div id="caretaker-step-1-${item.id}">
-                <form onsubmit="requestCaretakerFixOtp(event, ${item.id})">
-                  <div class="form-group">
-                    <label>Resolution Action</label>
-                    <select id="action_type-${item.id}">
-                      <option value="Repaired">Repaired</option>
-                      <option value="Replaced">Replaced</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label>Upload Proof Photo</label>
-                    <input type="file" id="fix_photo-${item.id}" accept="image/*" required>
-                  </div>
-                  <button type="submit" id="caretaker-sub-btn-${item.id}" style="width:100%; background: #2980b9;">Send OTP to Verify & Submit Fix</button>
-                </form>
-              </div>
-
-              <div id="caretaker-step-2-${item.id}" style="display:none; margin-top:10px; background:#e1f5fe; padding:12px; border-radius:6px; border:1px solid #b3e5fc;">
-                <label style="color:#0277bd; font-size:0.85em;">Enter OTP sent to Caretaker Webmail (aashishraj0310@gmail.com):</label>
-                <input type="text" id="caretaker_otp_input-${item.id}" maxlength="6" placeholder="123456" style="margin: 5px 0 10px 0;">
-                <button onclick="confirmCaretakerFixOtp(${item.id})" style="width:100%; background:#0288d1;">Verify OTP & Mark Fixed</button>
-              </div>
-
+              <h4 style="margin: 0 0 8px 0;">Caretaker Resolution Action</h4>
+              <form onsubmit="submitCaretakerFixDirect(event, ${item.id})">
+                <div class="form-group">
+                  <label>Upload Proof Photo</label>
+                  <input type="file" id="fix_photo-${item.id}" accept="image/*" required>
+                </div>
+                <button type="submit" id="caretaker-sub-btn-${item.id}" style="width:100%; background: #2980b9;">Submit Resolution Proof</button>
+              </form>
             </div>
           `;
         } else if (isVerifying) {
-          actionAreaHtml = `<div style="font-size:0.85em; color:#d35400; font-weight:bold; margin-top:10px; background:#fff8e1; padding:8px; border-radius:4px; text-align:center;">⌛ Awaiting Student OTP Verification</div>`;
+          actionAreaHtml = `<div style="font-size:0.85em; color:#d35400; font-weight:bold; margin-top:10px; background:#fff8e1; padding:8px; border-radius:4px; text-align:center;">⌛ Awaiting Student Verification</div>`;
         }
       } 
       else if (currentRole === 'student') {

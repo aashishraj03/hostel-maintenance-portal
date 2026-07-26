@@ -6898,69 +6898,51 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 });
 
 // =================================================================
-// 3. CARETAKER FIX ACTION: REQUEST OTP
+// 3. CARETAKER LOGIN OTP (REQUEST & VERIFY)
 // =================================================================
-app.post('/api/complaints/request-caretaker-otp/:id', upload.any(), async (req, res) => {
+app.post('/api/caretaker/request-login-otp', async (req, res) => {
   try {
-    const { id } = req.params;
-    const action_type = req.body.action_type || 'Repaired';
-    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
-
-    const complaintRes = await pool.query('SELECT * FROM complaints WHERE id = $1', [id]);
-    if (complaintRes.rows.length === 0) {
-      return res.status(404).json({ error: "Complaint not found" });
+    const { hostel_name } = req.body;
+    if (!hostel_name) {
+      return res.status(400).json({ error: "Hostel selection is required" });
     }
 
-    const complaint = complaintRes.rows[0];
-    const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
+    const caretakerEmail = getCaretakerEmail(hostel_name);
     const otp = generateOTP();
 
-    const fixPhotoDataUri = uploadedFile 
-      ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
-      : '';
-
-    otpStore.set(`caretaker_fix_${id}`, {
+    otpStore.set(`caretaker_login_${hostel_name}`, {
       otp,
-      complaintId: id,
-      action_type,
-      fix_photo: fixPhotoDataUri,
       expiresAt: Date.now() + 5 * 60 * 1000
     });
 
     await transporter.sendMail({
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
       to: caretakerEmail,
-      subject: `🔑 OTP to Verify Fix for Issue #${id}`,
-      // text: `Your OTP to submit resolution proof for Issue #${id} (${complaint.hostel_name}) is: ${otp}`
+      subject: `🔑 Caretaker Portal Access OTP - ${hostel_name}`,
       html: `
-      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-        <h2 style="color: #2980b9; margin-top: 0;">Resolution Proof Verification</h2>
-        <p style="color: #555; font-size: 14px;">Your OTP to verify and submit work proof for <strong>Issue #${id} (${complaint.hostel_name})</strong> is:</p>
-        <div style="text-align: center; margin: 25px 0;">
-          <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2980b9; background: #ebf5fb; padding: 10px 20px; border-radius: 6px; border: 1px dashed #2980b9; display: inline-block;">${otp}</span>
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+          <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Caretaker Dashboard for <strong>${hostel_name} Hostel</strong>:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2980b9; background: #ebf5fb; padding: 10px 20px; border-radius: 6px; border: 1px dashed #2980b9; display: inline-block;">${otp}</span>
+          </div>
+          <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
         </div>
-        <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
-      </div>
-    `
+      `
     });
 
     return res.json({ success: true, emailSentTo: caretakerEmail });
   } catch (err) {
-    console.error("Error in request-caretaker-otp:", err);
-    return res.status(500).json({ error: err.message || "Failed to send Caretaker OTP" });
+    console.error("Error sending caretaker login OTP:", err);
+    return res.status(500).json({ error: err.message || "Failed to send Caretaker Login OTP" });
   }
 });
 
-// =================================================================
-// 4. CARETAKER FIX ACTION: VERIFY OTP
-// =================================================================
-app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
+app.post('/api/caretaker/verify-login-otp', async (req, res) => {
   try {
-    const { id } = req.params;
-    const { userOtp } = req.body;
-
-    const pendingKey = `caretaker_fix_${id}`;
-    const pending = otpStore.get(pendingKey);
+    const { hostel_name, userOtp } = req.body;
+    const storeKey = `caretaker_login_${hostel_name}`;
+    const pending = otpStore.get(storeKey);
 
     if (!pending || pending.expiresAt < Date.now()) {
       return res.status(400).json({ error: "OTP expired or invalid" });
@@ -6970,14 +6952,38 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
       return res.status(400).json({ error: "Invalid OTP" });
     }
 
+    otpStore.delete(storeKey);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Verification failed" });
+  }
+});
+
+// =================================================================
+// 4. CARETAKER DIRECT FIX SUBMISSION 
+// =================================================================
+app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+
+    if (!uploadedFile) {
+      return res.status(400).json({ error: "Proof photo is required" });
+    }
+
+    const fixPhotoDataUri = `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}`;
+
     const updateQuery = `
       UPDATE complaints 
       SET status = 'Awaiting Verification', fix_photo = $1
       WHERE id = $2 
       RETURNING *;
     `;
-    const updateResult = await pool.query(updateQuery, [pending.fix_photo || '', id]);
-    otpStore.delete(pendingKey);
+    const updateResult = await pool.query(updateQuery, [fixPhotoDataUri, id]);
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: "Complaint not found" });
+    }
 
     const complaint = updateResult.rows[0];
 
@@ -6989,7 +6995,6 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
           to: studentEmail,
           subject: `🔧 Maintenance Issue #${id} Fixed - Verification Required`,
-          // text: `The caretaker has uploaded proof of fix for your complaint (#${id}). Please log into the portal to verify and confirm resolution.`
           html: `
           <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
             <h2 style="color: #27ae60; margin-top: 0;">🔧 Work Completed on Issue #${id}</h2>
@@ -7008,8 +7013,8 @@ app.post('/api/complaints/verify-caretaker-otp/:id', async (req, res) => {
 
     return res.json({ success: true, complaint });
   } catch (err) {
-    console.error("Error in verify-caretaker-otp:", err);
-    return res.status(500).json({ error: err.message || "Failed to verify Caretaker OTP" });
+    console.error("Error submitting fix:", err);
+    return res.status(500).json({ error: err.message || "Failed to submit fix" });
   }
 });
 
