@@ -254,6 +254,27 @@
       </div>
     </div>
 
+    <!-- Admin Login Card -->
+    <div class="card" id="adminLoginCard" style="display: none; background: #f5eeed; border: 1px solid #d5c8e6;">
+      <h2 style="margin-top: 0; color: #8e44ad;">🔑 Master Admin Verification</h2>
+      
+      <!-- Step 1: Send OTP -->
+      <div id="adminLoginStep1">
+        <p style="color: #5b2c6f; margin-bottom: 12px; font-weight: 500;">Click below to send a master verification OTP to the host webmail account.</p>
+        <button onclick="requestAdminLoginOtp()" id="adminLoginOtpBtn" style="background: #8e44ad; padding: 10px 18px;">Send Verification OTP to Admin Email</button>
+      </div>
+
+      <!-- Step 2: Enter OTP -->
+      <div id="adminLoginStep2" style="display: none; margin-top: 10px; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #d5c8e6;">
+        <label id="adminOtpLabel" style="color: #6c3483; font-weight: bold;">Enter 6-Digit OTP sent to Admin Webmail:</label>
+        <input type="text" id="admin_login_otp_input" maxlength="6" placeholder="123456" style="margin: 8px 0 12px 0;">
+        <div style="display: flex; gap: 10px;">
+          <button onclick="verifyAdminLoginOtp()" style="flex: 1; background: #8e44ad;">Verify OTP & Unlock Portal</button>
+          <button onclick="resetAdminLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Student Report Form -->
     <div class="card" id="studentFormCard" style="display: none;">
       <h2>Report an Issue</h2>
@@ -318,7 +339,7 @@
         <small style="color: #cbd5e1;">Search or filter by hostel</small>
       </div>
       <div class="filter-controls">
-        <!-- My Issues Filter Toggle (Student Only - On By Default) -->
+        <!-- My Issues Filter Toggle (Student Only) -->
         <button type="button" class="filter-btn active" id="myIssuesToggleBtn" onclick="toggleMyIssuesFilter()">
           👤 My Issues
         </button>
@@ -366,6 +387,8 @@
   let selectedCaretakerHostel = "";
   let isCaretakerVerified = false;
 
+  let isAdminVerified = false;
+
   let filterMyIssuesOnly = true;
 
   function selectRole(role) {
@@ -382,7 +405,7 @@
       switchRole('caretaker');
     } else if (role === 'admin') {
       roleTag.innerText = 'Mode: Admin Portal';
-      alert('Admin Login selected.');
+      switchRole('admin');
     }
   }
 
@@ -405,6 +428,8 @@
       resetStudentLogin();
     } else if (role === 'caretaker') {
       resetCaretakerLogin();
+    } else if (role === 'admin') {
+      resetAdminLogin();
     }
 
     loadComplaints();
@@ -473,8 +498,13 @@
       document.getElementById('activeRoleTag').innerText = `Mode: Student Portal (${loggedInKerberos})`;
       
       document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('adminLoginCard').style.display = 'none';
+
       document.getElementById('studentFormCard').style.display = 'block';
       document.getElementById('portalFilterBar').style.display = 'flex';
+      document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
+      document.getElementById('dashboardTitle').innerText = 'Student Feed';
       
       filterMyIssuesOnly = true;
       document.getElementById('myIssuesToggleBtn').classList.add('active');
@@ -497,6 +527,7 @@
     document.getElementById('stLoginStep2').style.display = 'none';
 
     document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('studentFormCard').style.display = 'none';
     document.getElementById('portalFilterBar').style.display = 'none';
 
@@ -635,9 +666,12 @@
       alert(`Verified! Caretaker access unlocked for ${hostel} Hostel.`);
       selectedCaretakerHostel = hostel;
       isCaretakerVerified = true;
+
       document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
       document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('adminLoginCard').style.display = 'none';
+
       document.getElementById('studentFormCard').style.display = 'none';
       document.getElementById('portalFilterBar').style.display = 'none';
       loadComplaints();
@@ -656,6 +690,8 @@
     
     document.getElementById('caretakerHostelSelectCard').style.display = 'block';
     document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('adminLoginCard').style.display = 'none';
+
     document.getElementById('studentFormCard').style.display = 'none';
     document.getElementById('portalFilterBar').style.display = 'none';
 
@@ -703,6 +739,88 @@
     }
   }
 
+  // --- ADMIN LOGIN OTP ---
+  async function requestAdminLoginOtp() {
+    const btn = document.getElementById('adminLoginOtpBtn');
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP...';
+
+    try {
+      const res = await fetch('/api/admin/request-login-otp', { method: 'POST' });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`OTP sent to Host Webmail (${data.emailSentTo})!`);
+        document.getElementById('adminLoginStep1').style.display = 'none';
+        document.getElementById('adminLoginStep2').style.display = 'block';
+        document.getElementById('adminOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
+      } else {
+        alert(data.error || 'Failed to send admin login OTP.');
+        btn.disabled = false;
+        btn.innerText = 'Send Verification OTP to Admin Email';
+      }
+    } catch (err) {
+      alert('Network error while requesting login OTP.');
+      btn.disabled = false;
+      btn.innerText = 'Send Verification OTP to Admin Email';
+    }
+  }
+
+  async function verifyAdminLoginOtp() {
+    const userOtp = document.getElementById('admin_login_otp_input').value.trim();
+
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch('/api/admin/verify-login-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert('Verified! Admin Access Unlocked.');
+      isAdminVerified = true;
+
+      document.getElementById('activeRoleTag').innerText = 'Mode: Admin Portal (Verified Master)';
+      
+      document.getElementById('adminLoginCard').style.display = 'none';
+      document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('studentFormCard').style.display = 'none';
+
+      document.getElementById('portalFilterBar').style.display = 'flex';
+      document.getElementById('myIssuesToggleBtn').style.display = 'none';
+      document.getElementById('dashboardTitle').innerText = 'Admin Management Console';
+
+      loadComplaints();
+    } else {
+      alert(data.error || 'Invalid OTP.');
+    }
+  }
+
+  function resetAdminLogin() {
+    isAdminVerified = false;
+
+    document.getElementById('admin_login_otp_input').value = "";
+    document.getElementById('adminLoginCard').style.display = 'block';
+    document.getElementById('adminLoginStep1').style.display = 'block';
+    document.getElementById('adminLoginStep2').style.display = 'none';
+
+    document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('studentFormCard').style.display = 'none';
+    document.getElementById('portalFilterBar').style.display = 'none';
+
+    const btn = document.getElementById('adminLoginOtpBtn');
+    btn.disabled = false;
+    btn.innerText = 'Send Verification OTP to Admin Email';
+  }
+
   function openLightbox(src) {
     document.getElementById('lightboxImg').src = src;
     document.getElementById('lightbox').style.display = 'flex';
@@ -739,8 +857,11 @@
 
     if (currentRole === 'caretaker' && !isCaretakerVerified) return;
     if (currentRole === 'student' && !isStudentVerified) return;
+    if (currentRole === 'admin' && !isAdminVerified) return;
 
-    let activeHostel = (currentRole === 'student') ? document.getElementById('hostelFilter').value : selectedCaretakerHostel;
+    let activeHostel = (currentRole === 'student' || currentRole === 'admin') 
+      ? document.getElementById('hostelFilter').value 
+      : selectedCaretakerHostel;
 
     const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}`);
     let data = await res.json();
@@ -822,7 +943,6 @@
         }
       } 
       else if (currentRole === 'student') {
-        // ONLY SHOW ACTION BUTTONS IF THIS ISSUE BELONGS TO THE LOGGED IN STUDENT
         const isOwner = item.kerberos_id && item.kerberos_id.trim().toLowerCase() === loggedInKerberos.toLowerCase();
 
         if (isVerifying && isOwner) {
