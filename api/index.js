@@ -7157,6 +7157,15 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
+    const autoResolveQuery = `
+      UPDATE complaints 
+      SET status = 'Resolved' 
+      WHERE status LIKE 'Awaiting%' 
+        AND created_at < NOW() - INTERVAL '24 hours';
+    `;
+    await pool.query(autoResolveQuery);
+
+    
     const { hostel } = req.query;
     let query = `
       SELECT 
