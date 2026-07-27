@@ -6700,7 +6700,8 @@
 
 // export default app;
 
-
+import crypto from 'crypto';
+const OTP_SECRET = process.env.OTP_SECRET || 'iitd-portal-super-secret-key-2026';
 import express from 'express';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
@@ -6729,7 +6730,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-
+b
 
 // --- Multer Configuration ---
 const storage = multer.memoryStorage();
@@ -6764,7 +6765,7 @@ function generateOTP() {
 const otpStore = new Map();
 
 // =================================================================
-// 0. STUDENT LOGIN OTP (REQUEST & VERIFY)
+// 0. STUDENT LOGIN OTP (REQUEST & VERIFY - STATELESS)
 // =================================================================
 app.post('/api/student/request-login-otp', async (req, res) => {
   try {
@@ -6776,11 +6777,12 @@ app.post('/api/student/request-login-otp', async (req, res) => {
     const cleanKerberos = kerberos_id.trim().toLowerCase();
     const studentEmail = `${cleanKerberos}@iitd.ac.in`;
     const otp = generateOTP();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
 
-    otpStore.set(`student_login_${cleanKerberos}`, {
-      otp,
-      expiresAt: Date.now() + 5 * 60 * 1000
-    });
+    // Sign payload using HMAC SHA256
+    const dataToSign = `${cleanKerberos}:${otp}:${expiresAt}`;
+    const hash = crypto.createHmac('sha256', OTP_SECRET).update(dataToSign).digest('hex');
+    const otpToken = `${hash}:${expiresAt}`;
 
     await transporter.sendMail({
       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
@@ -6798,7 +6800,7 @@ app.post('/api/student/request-login-otp', async (req, res) => {
       `
     });
 
-    return res.json({ success: true, emailSentTo: studentEmail });
+    return res.json({ success: true, emailSentTo: studentEmail, otpToken });
   } catch (err) {
     console.error("Error sending student login OTP:", err);
     return res.status(500).json({ error: err.message || "Failed to send Student Login OTP" });
@@ -6807,22 +6809,29 @@ app.post('/api/student/request-login-otp', async (req, res) => {
 
 app.post('/api/student/verify-login-otp', async (req, res) => {
   try {
-    const { kerberos_id, userOtp } = req.body;
+    const { kerberos_id, userOtp, otpToken } = req.body;
+    if (!kerberos_id || !userOtp || !otpToken) {
+      return res.status(400).json({ error: "Missing required verification parameters" });
+    }
+
     const cleanKerberos = kerberos_id.trim().toLowerCase();
-    const storeKey = `student_login_${cleanKerberos}`;
-    const pending = otpStore.get(storeKey);
+    const [hash, expiresAtStr] = otpToken.split(':');
+    const expiresAt = Number(expiresAtStr);
 
-    if (!pending || pending.expiresAt < Date.now()) {
-      return res.status(400).json({ error: "OTP expired or invalid" });
+    if (Date.now() > expiresAt) {
+      return res.status(400).json({ error: "OTP expired. Please request a new one." });
     }
 
-    if (pending.otp !== String(userOtp).trim()) {
-      return res.status(400).json({ error: "Invalid OTP" });
+    const dataToSign = `${cleanKerberos}:${String(userOtp).trim()}:${expiresAt}`;
+    const expectedHash = crypto.createHmac('sha256', OTP_SECRET).update(dataToSign).digest('hex');
+
+    if (hash !== expectedHash) {
+      return res.status(400).json({ error: "Invalid OTP. Please check and try again." });
     }
 
-    otpStore.delete(storeKey);
     return res.json({ success: true, kerberos_id: cleanKerberos });
   } catch (err) {
+    console.error("Error verifying OTP:", err);
     return res.status(500).json({ error: err.message || "Verification failed" });
   }
 });

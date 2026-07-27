@@ -476,6 +476,8 @@
   }
 
   // --- STUDENT LOGIN OTP ---
+  let currentStudentOtpToken = ""; // Variable to hold signed token
+
   async function requestStudentLoginOtp() {
     const kerberos = document.getElementById('st_kerberos_input').value.trim();
     if (!kerberos) {
@@ -497,6 +499,7 @@
 
       if (res.ok) {
         alert(`OTP sent to ${data.emailSentTo}!`);
+        currentStudentOtpToken = data.otpToken; // Store token seamlessly
         document.getElementById('stLoginStep1').style.display = 'none';
         document.getElementById('stLoginStep2').style.display = 'block';
         document.getElementById('stOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
@@ -524,7 +527,11 @@
     const res = await fetch('/api/student/verify-login-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kerberos_id: kerberos, userOtp })
+      body: JSON.stringify({ 
+        kerberos_id: kerberos, 
+        userOtp: userOtp, 
+        otpToken: currentStudentOtpToken 
+      })
     });
 
     const data = await res.json();
@@ -546,7 +553,6 @@
       document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
       document.getElementById('dashboardTitle').innerText = 'Student Feed';
       
-      // Default to My Issues ON
       filterMyIssuesOnly = true;
       updateFilterUI();
 
