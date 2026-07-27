@@ -6730,7 +6730,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-b
 
 // --- Multer Configuration ---
 const storage = multer.memoryStorage();
