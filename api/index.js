@@ -7169,19 +7169,26 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 
 
 // =================================================================
-// 6. GET COMPLAINTS (WITH HOSTEL FILTER)
+// 6. GET COMPLAINTS (WITH BULLETPROOF AUTO-RESOLVE)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
+    // 1. Ensure updated_at column exists safely on query execution
+    await pool.query(`
+      ALTER TABLE complaints 
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+    `);
+
+    // 2. Auto-resolve complaints stuck in 'Awaiting%' for > 24 hours
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
       WHERE status LIKE 'Awaiting%' 
-        AND updated_at < NOW() - INTERVAL '24 hours';
+        AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '24 hours';
     `;
     await pool.query(autoResolveQuery);
 
-
+    // 3. Fetch complaints list
     const { hostel } = req.query;
     let query = `
       SELECT 
@@ -7196,7 +7203,7 @@ app.get('/api/complaints', async (req, res) => {
         COALESCE(rejection_count, 0) AS rejection_count,
         last_rejection_reason,
         created_at,
-        EXTRACT(EPOCH FROM (NOW() - created_at))/3600 AS hours_since_fix 
+        EXTRACT(EPOCH FROM (NOW() - COALESCE(updated_at, created_at)))/3600 AS hours_since_fix 
       FROM complaints
     `;
     let queryParams = [];
