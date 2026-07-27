@@ -6729,21 +6729,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-async function initDatabase() {
-  try {
-    // Safely adds updated_at column to complaints table if it isn't there already
-    await pool.query(`
-      ALTER TABLE complaints 
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-    `);
-    console.log("Database initialized safely (updated_at column verified).");
-  } catch (err) {
-    console.error("Error during database initialization:", err);
-  }
-}
 
-// Run auto-init when server starts
-initDatabase();
 
 // --- Multer Configuration ---
 const storage = multer.memoryStorage();
@@ -7056,7 +7042,7 @@ app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
 
     const updateQuery = `
       UPDATE complaints 
-      SET status = 'Awaiting Verification', fix_photo = $1, updated_at = NOW()
+      SET status = 'Awaiting Verification', fix_photo = $1
       WHERE id = $2 
       RETURNING *;
     `;
@@ -7173,18 +7159,12 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
-    // 1. Ensure updated_at column exists safely on query execution
-    await pool.query(`
-      ALTER TABLE complaints 
-      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-    `);
-
     // 2. Auto-resolve complaints stuck in 'Awaiting%' for > 24 hours
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
       WHERE status LIKE 'Awaiting%' 
-        AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '24 hours';
+        AND created_at < NOW() - INTERVAL '24 hours';
     `;
     await pool.query(autoResolveQuery);
 
