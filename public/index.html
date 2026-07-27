@@ -336,35 +336,38 @@
     <div class="filter-bar" id="portalFilterBar" style="display: none;">
       <div>
         <h3 style="margin: 0;" id="dashboardTitle">Student Feed</h3>
-        <small style="color: #cbd5e1;">Search or filter by hostel</small>
+        <small style="color: #cbd5e1;" id="dashboardSubtitle">Viewing your reported issues</small>
       </div>
       <div class="filter-controls">
         <!-- My Issues Filter Toggle (Student Only) -->
         <button type="button" class="filter-btn active" id="myIssuesToggleBtn" onclick="toggleMyIssuesFilter()">
-          👤 My Issues
+          🌐 Show All Issues
         </button>
 
-        <input type="text" id="hostelSearch" placeholder="🔍 Type hostel name..." oninput="filterBySearch()" style="padding: 8px 12px;">
-        
-        <select id="hostelFilter" onchange="syncSearchAndLoad()">
-          <option value="ALL">All Hostels</option>
-          <option value="Aravali">Aravali</option>
-          <option value="Dronagiri">Dronagiri</option>
-          <option value="Girnar">Girnar</option>
-          <option value="Himadri">Himadri</option>
-          <option value="Jwala">Jwala</option>
-          <option value="Kailash">Kailash</option>
-          <option value="Karakoram">Karakoram</option>
-          <option value="Kumaon">Kumaon</option>
-          <option value="Nilgiri">Nilgiri</option>
-          <option value="Sahyadri">Sahyadri</option>
-          <option value="Saptagiri">Saptagiri</option>
-          <option value="Satpura">Satpura</option>
-          <option value="Shivalik">Shivalik</option>
-          <option value="Udaigiri">Udaigiri</option>
-          <option value="Vindhyachal">Vindhyachal</option>
-          <option value="Zanskar">Zanskar</option>
-        </select>
+        <!-- Hostel Selection & Search Container (Hidden when "My Issues" is active) -->
+        <div id="hostelFilterGroup" style="display: none; gap: 10px; align-items: center;">
+          <input type="text" id="hostelSearch" placeholder="🔍 Type hostel name..." oninput="filterBySearch()" style="padding: 8px 12px;">
+          
+          <select id="hostelFilter" onchange="syncSearchAndLoad()">
+            <option value="ALL">All Hostels</option>
+            <option value="Aravali">Aravali</option>
+            <option value="Dronagiri">Dronagiri</option>
+            <option value="Girnar">Girnar</option>
+            <option value="Himadri">Himadri</option>
+            <option value="Jwala">Jwala</option>
+            <option value="Kailash">Kailash</option>
+            <option value="Karakoram">Karakoram</option>
+            <option value="Kumaon">Kumaon</option>
+            <option value="Nilgiri">Nilgiri</option>
+            <option value="Sahyadri">Sahyadri</option>
+            <option value="Saptagiri">Saptagiri</option>
+            <option value="Satpura">Satpura</option>
+            <option value="Shivalik">Shivalik</option>
+            <option value="Udaigiri">Udaigiri</option>
+            <option value="Vindhyachal">Vindhyachal</option>
+            <option value="Zanskar">Zanskar</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -414,11 +417,31 @@
     document.getElementById('mainPortalContent').style.display = 'none';
   }
 
+  // --- DYNAMIC FILTER TOGGLE & HOSTEL FILTER VISIBILITY ---
   function toggleMyIssuesFilter() {
     filterMyIssuesOnly = !filterMyIssuesOnly;
-    const btn = document.getElementById('myIssuesToggleBtn');
-    btn.classList.toggle('active', filterMyIssuesOnly);
+    updateFilterUI();
     loadComplaints();
+  }
+
+  function updateFilterUI() {
+    const btn = document.getElementById('myIssuesToggleBtn');
+    const hostelGroup = document.getElementById('hostelFilterGroup');
+    const subtitle = document.getElementById('dashboardSubtitle');
+
+    if (filterMyIssuesOnly) {
+      // My Issues Active -> Offer button to see all, hide hostel controls
+      btn.innerText = '🌐 Show All Issues';
+      btn.classList.add('active');
+      if (hostelGroup) hostelGroup.style.display = 'none';
+      if (subtitle) subtitle.innerText = 'Viewing your reported issues';
+    } else {
+      // All Issues Active -> Offer button to see my issues, show hostel controls
+      btn.innerText = '👤 Show My Issues';
+      btn.classList.remove('active');
+      if (hostelGroup) hostelGroup.style.display = 'flex';
+      if (subtitle) subtitle.innerText = 'Viewing all public campus issues';
+    }
   }
 
   function switchRole(role) {
@@ -506,8 +529,9 @@
       document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
       document.getElementById('dashboardTitle').innerText = 'Student Feed';
       
+      // Default to My Issues ON
       filterMyIssuesOnly = true;
-      document.getElementById('myIssuesToggleBtn').classList.add('active');
+      updateFilterUI();
 
       loadComplaints();
     } else {
@@ -795,7 +819,9 @@
 
       document.getElementById('portalFilterBar').style.display = 'flex';
       document.getElementById('myIssuesToggleBtn').style.display = 'none';
+      document.getElementById('hostelFilterGroup').style.display = 'flex'; // Always visible in Admin mode
       document.getElementById('dashboardTitle').innerText = 'Admin Management Console';
+      document.getElementById('dashboardSubtitle').innerText = 'Full system access & hostel filters';
 
       loadComplaints();
     } else {
