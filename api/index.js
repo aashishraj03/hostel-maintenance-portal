@@ -6973,7 +6973,7 @@ app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
     console.error("Error submitting public complaint:", err);
     return res.status(500).json({ error: err.message || "Failed to submit public complaint" });
   }
-});i
+});
 
 // =================================================================
 // 2. STUDENT VERIFY OTP & POST COMPLAINT
