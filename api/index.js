@@ -7179,16 +7179,19 @@ app.post('/api/secretary/action-complaint/:id', async (req, res) => {
     const { approve } = req.body;
 
     if (approve) {
-      // Approve: Change status to 'Pending' so Caretaker sees it
+      // Approve: Update status from 'Pending Approval' to 'Pending' so Caretaker sees it
       const updateResult = await pool.query(
         `UPDATE complaints SET status = 'Pending' WHERE id = $1 RETURNING *;`,
         [id]
       );
-      if (updateResult.rows.length === 0) return res.status(404).json({ error: "Complaint not found" });
+
+      if (updateResult.rows.length === 0) {
+        return res.status(404).json({ error: "Complaint not found" });
+      }
 
       const complaint = updateResult.rows[0];
 
-      // Notify Caretaker
+      // 1. NOTIFY CARETAKER
       try {
         const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
         await transporter.sendMail({
@@ -7198,20 +7201,56 @@ app.post('/api/secretary/action-complaint/:id', async (req, res) => {
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
               <h2 style="color: #27ae60; margin-top: 0;">✅ Maintenance Issue Approved by Secretary</h2>
-              <p style="color: #555; font-size: 14px;">The Maintenance Secretary has reviewed and approved this complaint:</p>
-              <p><strong>Hostel:</strong> ${complaint.hostel_name}</p>
-              <p><strong>Category:</strong> ${complaint.category}</p>
-              <p><strong>Description:</strong> ${complaint.description}</p>
+              <p style="color: #555; font-size: 14px;">The Maintenance Secretary has reviewed and approved a student maintenance ticket:</p>
+              
+              <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+                <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${complaint.hostel_name}</td></tr>
+                <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${complaint.category}</td></tr>
+                <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${complaint.kerberos_id}@iitd.ac.in</td></tr>
+                <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${complaint.description}</td></tr>
+              </table>
+
+              <p style="color: #555; font-size: 13px;">Please log into the Caretaker Portal to review and upload resolution proof once fixed.</p>
             </div>
           `
         });
       } catch (mailErr) {
-        console.error("Mail error:", mailErr);
+        console.error("Failed to send Caretaker email:", mailErr);
       }
 
-      return res.json({ success: true, message: "Complaint approved and sent to caretaker!" });
+      // 2. NOTIFY STUDENT (ISSUE RAISER)
+      if (complaint.kerberos_id) {
+        try {
+          const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
+          await transporter.sendMail({
+            from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+            to: studentEmail,
+            subject: `✅ Issue Approved & Forwarded - Maintenance Ticket #${complaint.id}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                <h2 style="color: #27ae60; margin-top: 0;">✅ Quick Issue Approved</h2>
+                <p style="color: #555; font-size: 14px;">Good news! Your maintenance ticket submitted without OTP has been reviewed and <strong>approved</strong> by your Hostel Maintenance Secretary.</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+                  <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Ticket ID:</td><td style="padding: 8px;">#${complaint.id}</td></tr>
+                  <tr><td style="padding: 8px; font-weight: bold;">Hostel:</td><td style="padding: 8px;">${complaint.hostel_name}</td></tr>
+                  <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${complaint.category}</td></tr>
+                  <tr><td style="padding: 8px; font-weight: bold;">Status:</td><td style="padding: 8px; color: #27ae60; font-weight: bold;">Forwarded to Caretaker</td></tr>
+                </table>
+
+                <p style="color: #555; font-size: 13px;">Your ticket is now active on the caretaker dashboard for repair.</p>
+              </div>
+            `
+          });
+        } catch (studentMailErr) {
+          console.error("Failed to send Student approval email:", studentMailErr);
+        }
+      }
+
+      return res.json({ success: true, message: "Complaint approved and notifications sent to Caretaker and Student!" });
+
     } else {
-      // Reject: Delete or update complaint
+      // Reject: Remove unverified complaint from database
       await pool.query(`DELETE FROM complaints WHERE id = $1;`, [id]);
       return res.json({ success: true, message: "Complaint rejected and removed." });
     }
