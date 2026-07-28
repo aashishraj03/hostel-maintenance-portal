@@ -1252,8 +1252,13 @@
       ? document.getElementById('hostelFilter').value 
       : (currentRole === 'secretary' ? selectedSecretaryHostel : selectedCaretakerHostel);
 
-    const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}`);
+    const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`);
     let data = await res.json();
+
+    // Client-side Fail-safe: Exclude 'Pending Approval' tickets from Caretaker view
+    if (currentRole === 'caretaker') {
+      data = data.filter(item => item.status !== 'Pending Approval');
+    }
 
     if (searchQuery && activeHostel === 'ALL') {
       data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));

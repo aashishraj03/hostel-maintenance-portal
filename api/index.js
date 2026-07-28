@@ -7389,11 +7389,11 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 
 
 // =================================================================
-// 6. GET COMPLAINTS (WITH BULLETPROOF AUTO-RESOLVE)
+// 6. GET COMPLAINTS (FILTER UNAPPROVED ISSUES FROM CARETAKERS)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
-    // 2. Auto-resolve complaints stuck in 'Awaiting%' for > 24 hours
+    // 1. Auto-resolve complaints stuck in 'Awaiting%' for > 24 hours
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
@@ -7402,8 +7402,8 @@ app.get('/api/complaints', async (req, res) => {
     `;
     await pool.query(autoResolveQuery);
 
-    // 3. Fetch complaints list
-    const { hostel } = req.query;
+    // 2. Fetch complaints list
+    const { hostel, role } = req.query;
     let query = `
       SELECT 
         id,
@@ -7417,14 +7417,21 @@ app.get('/api/complaints', async (req, res) => {
         COALESCE(rejection_count, 0) AS rejection_count,
         last_rejection_reason,
         created_at,
-        EXTRACT(EPOCH FROM (NOW() - COALESCE(updated_at, created_at)))/3600 AS hours_since_fix 
+        EXTRACT(EPOCH FROM (NOW() - created_at))/3600 AS hours_since_fix 
       FROM complaints
+      WHERE 1=1
     `;
     let queryParams = [];
 
+    // Filter by Hostel if specified
     if (hostel && hostel !== 'ALL') {
-      query += ' WHERE hostel_name = $1';
       queryParams.push(hostel);
+      query += ` AND hostel_name = $${queryParams.length}`;
+    }
+
+    // CRITICAL FIX: Hide 'Pending Approval' tickets from Caretakers
+    if (role === 'caretaker') {
+      query += ` AND status != 'Pending Approval'`;
     }
 
     query += ' ORDER BY created_at DESC;';
