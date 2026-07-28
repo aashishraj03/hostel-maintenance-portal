@@ -150,11 +150,13 @@
     .complaint-card { background: white; padding: 15px; border-radius: 8px; border-left: 6px solid #e74c3c; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
     .complaint-card.verifying { border-left-color: #f39c12; }
     .complaint-card.resolved { border-left-color: #27ae60; opacity: 0.85; }
+    .complaint-card.pending-approval { border-left-color: #d35400; }
     
     .hostel-tag { display: inline-block; background: #e2e8f0; color: #334155; font-size: 0.75em; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-right: 5px; }
     .status-badge { display: inline-block; padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold; color: white; background: #e74c3c; }
     .status-badge.verifying { background: #f39c12; }
     .status-badge.resolved { background: #27ae60; }
+    .status-badge.pending-approval { background: #d35400; }
 
     .rejection-badge { display: inline-block; background: #fee2e2; color: #991b1b; border: 1px solid #f87171; font-size: 0.75em; font-weight: bold; padding: 3px 8px; border-radius: 4px; margin-left: 5px; }
     .rejection-box { background: #fff5f5; border: 1px solid #feb2b2; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 0.88em; color: #9b2c2c; }
@@ -309,7 +311,7 @@
         <label id="secOtpLabel" style="color: #d35400; font-weight: bold;">Enter 6-Digit OTP sent to Secretary Webmail:</label>
         <input type="text" id="sec_login_otp_input" maxlength="6" placeholder="123456" style="margin: 8px 0 12px 0;">
         <div style="display: flex; gap: 10px;">
-          <button onclick="verifySecretaryLoginOtp()" style="flex: 1; background: #e67e22;">Verify OTP & Review Unverified Issues</button>
+          <button onclick="verifySecretaryLoginOtp()" style="flex: 1; background: #e67e22;">Verify OTP & Review Dashboard</button>
           <button onclick="resetSecretaryLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
         </div>
       </div>
@@ -890,6 +892,28 @@
     btn.innerText = 'Send Verification OTP to Webmail';
   }
 
+  async function handleSecretaryAction(id, approve) {
+    if (!confirm(approve ? "Approve this complaint for Caretaker action?" : "Reject and remove this unverified complaint?")) return;
+
+    try {
+      const res = await fetch(`/api/secretary/action-complaint/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approve })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert("✅ " + (data.message || "Action processed successfully!"));
+        loadComplaints();
+      } else {
+        alert(data.error || "Action failed.");
+      }
+    } catch (err) {
+      alert("Network error while processing secretary action.");
+    }
+  }
+
   // --- STUDENT DIRECT COMPLAINT SUBMISSION ---
   async function submitStudentDirectComplaint(event) {
     event.preventDefault();
@@ -1247,16 +1271,19 @@
     }
 
     data.forEach(item => {
+      const isPendingApproval = item.status === 'Pending Approval';
       const isPending = item.status === 'Pending';
       const isVerifying = item.status.startsWith('Awaiting');
       const isResolved = item.status.startsWith('Resolved');
       const isAutoResolved = item.status.includes('(Auto)');
 
       let cardClass = 'complaint-card';
+      if (isPendingApproval) cardClass += ' pending-approval';
       if (isVerifying) cardClass += ' verifying';
       if (isResolved) cardClass += ' resolved';
 
       let badgeClass = 'status-badge';
+      if (isPendingApproval) badgeClass += ' pending-approval';
       if (isVerifying) badgeClass += ' verifying';
       if (isResolved) badgeClass += ' resolved';
       if (isAutoResolved) badgeClass += ' auto-resolved';
@@ -1293,7 +1320,21 @@
 
       let actionAreaHtml = '';
 
-      if (currentRole === 'caretaker') {
+      if (currentRole === 'secretary') {
+        if (isPendingApproval) {
+          actionAreaHtml = `
+            <div class="action-box" style="background: #fef9e7; border-color: #f9e79f;">
+              <h4 style="margin: 0 0 8px 0; color: #d35400;">Secretary Review Required</h4>
+              <p style="font-size: 0.8em; color: #7f8c8d; margin-top: 0;">Unverified public submission awaiting approval.</p>
+              <div style="display: flex; gap: 10px;">
+                <button onclick="handleSecretaryAction(${item.id}, true)" style="flex: 1; background: #27ae60;">Approve & Send to Caretaker</button>
+                <button onclick="handleSecretaryAction(${item.id}, false)" class="btn-danger" style="flex: 1;">Reject Ticket</button>
+              </div>
+            </div>
+          `;
+        }
+      }
+      else if (currentRole === 'caretaker') {
         if (isPending) {
           actionAreaHtml = `
             <div class="action-box">

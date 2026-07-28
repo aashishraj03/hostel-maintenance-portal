@@ -7170,6 +7170,56 @@ app.post('/api/secretary/verify-login-otp', async (req, res) => {
   }
 });
 
+// =================================================================
+// 3C. SECRETARY APPROVE / REJECT UNVERIFIED COMPLAINT
+// =================================================================
+app.post('/api/secretary/action-complaint/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approve } = req.body;
+
+    if (approve) {
+      // Approve: Change status to 'Pending' so Caretaker sees it
+      const updateResult = await pool.query(
+        `UPDATE complaints SET status = 'Pending' WHERE id = $1 RETURNING *;`,
+        [id]
+      );
+      if (updateResult.rows.length === 0) return res.status(404).json({ error: "Complaint not found" });
+
+      const complaint = updateResult.rows[0];
+
+      // Notify Caretaker
+      try {
+        const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
+        await transporter.sendMail({
+          from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+          to: caretakerEmail,
+          subject: `🚨 Approved Maintenance Request: ${complaint.hostel_name}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+              <h2 style="color: #27ae60; margin-top: 0;">✅ Maintenance Issue Approved by Secretary</h2>
+              <p style="color: #555; font-size: 14px;">The Maintenance Secretary has reviewed and approved this complaint:</p>
+              <p><strong>Hostel:</strong> ${complaint.hostel_name}</p>
+              <p><strong>Category:</strong> ${complaint.category}</p>
+              <p><strong>Description:</strong> ${complaint.description}</p>
+            </div>
+          `
+        });
+      } catch (mailErr) {
+        console.error("Mail error:", mailErr);
+      }
+
+      return res.json({ success: true, message: "Complaint approved and sent to caretaker!" });
+    } else {
+      // Reject: Delete or update complaint
+      await pool.query(`DELETE FROM complaints WHERE id = $1;`, [id]);
+      return res.json({ success: true, message: "Complaint rejected and removed." });
+    }
+  } catch (err) {
+    console.error("Error in secretary action:", err);
+    return res.status(500).json({ error: err.message || "Failed to process secretary action" });
+  }
+});
 
 // =================================================================
 // 4. CARETAKER DIRECT FIX SUBMISSION 
