@@ -91,6 +91,32 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
     }
 
+    /* --- DISTINCT STANDALONE QUICK REPORT BUTTON STYLES --- */
+    .quick-report-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 15px 20px;
+      border-radius: 8px;
+      border: 1.5px solid #f5c6cb;
+      background: #ffffff;
+      color: #721c24;
+      font-size: 1.02em;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 6px rgba(114, 28, 36, 0.05);
+    }
+
+    .quick-report-btn:hover {
+      background: #f8d7da;
+      border-color: #f5c6cb;
+      color: #721c24;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 14px rgba(114, 28, 36, 0.12);
+    }
+
     .back-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
     .back-btn { background: #64748b; color: #ffffff; padding: 6px 14px; border-radius: 5px; font-size: 0.85em; border: none; cursor: pointer; }
     .back-btn:hover { background: #475569; }
@@ -184,6 +210,12 @@
         <span>→</span>
       </button>
 
+      <!-- MAINTENANCE SECRETARY LOGIN BUTTON -->
+      <button class="role-option-btn" onclick="selectRole('secretary')">
+        <span>📋 Maintenance Secretary Login</span>
+        <span>→</span>
+      </button>
+
       <button class="role-option-btn" onclick="selectRole('caretaker')">
         <span>🛠️ Caretaker Login</span>
         <span>→</span>
@@ -205,7 +237,7 @@
 
     <h1>Campus Maintenance Portal</h1>
 
-    <!-- Student Kerberos Verification Card -->
+    <!-- CONTAINER CARD 1: Student Kerberos Verification Card -->
     <div class="card" id="studentLoginCard" style="display: none; background: #e8f8f5; border: 1px solid #a3e4d7;">
       <h2 style="margin-top: 0; color: #16a085;">🎓 Student Kerberos Verification</h2>
       
@@ -215,7 +247,7 @@
           <label style="color: #0e6251;">Enter Kerberos ID:</label>
           <input type="text" id="st_kerberos_input" placeholder="e.g. ce1230456" style="margin-bottom: 10px;">
         </div>
-        <button onclick="requestStudentLoginOtp()" id="stLoginOtpBtn" style="background: #16a085; padding: 10px 18px;">Send Verification OTP to Kerberos Webmail</button>
+        <button onclick="requestStudentLoginOtp()" id="stLoginOtpBtn" style="background: #16a085; padding: 10px 18px; width: 100%;">Send Verification OTP to Kerberos Webmail</button>
       </div>
 
       <!-- Step 2: Enter OTP -->
@@ -225,6 +257,60 @@
         <div style="display: flex; gap: 10px;">
           <button onclick="verifyStudentLoginOtp()" style="flex: 1; background: #16a085;">Verify OTP & Unlock Portal</button>
           <button onclick="resetStudentLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTAINER CARD 2: SEPARATE QUICK REPORT CONTAINER CARD -->
+    <div class="card" id="studentQuickReportCard" style="display: none; background: #fdf2f2; border: 1px solid #f5c6cb;">
+      <h2 style="margin-top: 0; color: #721c24;">⚡ Direct Quick Issue Reporting</h2>
+      <p style="color: #856404; font-size: 0.9em; margin-bottom: 15px; background: #fff3cd; padding: 10px; border-radius: 5px; border-left: 4px solid #ffc107;">
+        <strong>Notice:</strong> Submitting without OTP verification sends your issue for review by the <strong>Hostel Maintenance Secretary</strong> to prevent spam. This may cause a slight delay in reaching caretakers.
+      </p>
+      <button type="button" class="quick-report-btn" onclick="openPublicIssueModal()">
+        <span>Submit Maintenance Issue Without OTP</span>
+        <span>→</span>
+      </button>
+    </div>
+
+    <!-- CONTAINER CARD 3: MAINTENANCE SECRETARY LOGIN CARD -->
+    <div class="card" id="secretaryLoginCard" style="display: none; background: #fef9e7; border: 1px solid #f9e79f;">
+      <h2 style="margin-top: 0; color: #d35400;">📋 Maintenance Secretary Portal</h2>
+      
+      <!-- Step 1: Select Hostel -->
+      <div id="secLoginStep1">
+        <div class="form-group">
+          <label style="color: #a04000; font-size: 1em; margin-bottom: 8px;">Select Your Hostel:</label>
+          <select id="secretary_hostel_dropdown" class="caretaker-dropdown-select" style="border-color: #e67e22; color: #a04000;">
+            <option value="" disabled selected>-- Select Hostel --</option>
+            <option value="Aravali">Aravali</option>
+            <option value="Dronagiri">Dronagiri</option>
+            <option value="Girnar">Girnar</option>
+            <option value="Himadri">Himadri</option>
+            <option value="Jwala">Jwala</option>
+            <option value="Kailash">Kailash</option>
+            <option value="Karakoram">Karakoram</option>
+            <option value="Kumaon">Kumaon</option>
+            <option value="Nilgiri">Nilgiri</option>
+            <option value="Sahyadri">Sahyadri</option>
+            <option value="Saptagiri">Saptagiri</option>
+            <option value="Satpura">Satpura</option>
+            <option value="Shivalik">Shivalik</option>
+            <option value="Udaigiri">Udaigiri</option>
+            <option value="Vindhyachal">Vindhyachal</option>
+            <option value="Zanskar">Zanskar</option>
+          </select>
+        </div>
+        <button onclick="requestSecretaryLoginOtp()" id="secLoginOtpBtn" style="background: #e67e22; padding: 10px 18px;">Send Verification OTP to Webmail</button>
+      </div>
+
+      <!-- Step 2: Enter OTP -->
+      <div id="secLoginStep2" style="display: none; margin-top: 10px; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #f9e79f;">
+        <label id="secOtpLabel" style="color: #d35400; font-weight: bold;">Enter 6-Digit OTP sent to Secretary Webmail:</label>
+        <input type="text" id="sec_login_otp_input" maxlength="6" placeholder="123456" style="margin: 8px 0 12px 0;">
+        <div style="display: flex; gap: 10px;">
+          <button onclick="verifySecretaryLoginOtp()" style="flex: 1; background: #e67e22;">Verify OTP & Review Unverified Issues</button>
+          <button onclick="resetSecretaryLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
         </div>
       </div>
     </div>
@@ -361,7 +447,7 @@
           🌐 Show All Issues
         </button>
 
-        <!-- Hostel Selection & Search Container (Hidden when "My Issues" is active) -->
+        <!-- Hostel Selection & Search Container -->
         <div id="hostelFilterGroup" style="display: none; gap: 10px; align-items: center;">
           <input type="text" id="hostelSearch" placeholder="🔍 Type hostel name..." oninput="filterBySearch()" style="padding: 8px 12px;">
           
@@ -394,6 +480,74 @@
 
 </div>
 
+<!-- QUICK PUBLIC ISSUE MODAL (NO OTP) -->
+<div id="publicIssueModal" class="lightbox" style="display:none; cursor: default;">
+  <div class="card" style="max-width: 550px; width: 90%; background: #ffffff; text-align: left; position: relative;">
+    <h2 style="color: #c0392b; margin-top: 0;">⚡ Submit Issue Without OTP</h2>
+    
+    <!-- MANDATORY SPAM WARNING BOX -->
+    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin-bottom: 15px; border-radius: 4px; font-size: 0.88em; color: #856404;">
+      <strong>⚠️ Important Notice:</strong> To prevent spamming, issues submitted without OTP verification are subject to review and acceptance by the <strong>Hostel Maintenance Secretary</strong> before being forwarded to the caretaker. This may cause a slight delay in raising your issue.
+    </div>
+
+    <form id="publicComplaintForm" onsubmit="submitPublicComplaint(event)">
+      <div class="form-group">
+        <label>Select Hostel</label>
+        <select id="pub_hostel" name="hostel_name" required>
+          <option value="" disabled selected>-- Select Hostel --</option>
+          <option value="Aravali">Aravali</option>
+          <option value="Dronagiri">Dronagiri</option>
+          <option value="Girnar">Girnar</option>
+          <option value="Himadri">Himadri</option>
+          <option value="Jwala">Jwala</option>
+          <option value="Kailash">Kailash</option>
+          <option value="Karakoram">Karakoram</option>
+          <option value="Kumaon">Kumaon</option>
+          <option value="Nilgiri">Nilgiri</option>
+          <option value="Sahyadri">Sahyadri</option>
+          <option value="Saptagiri">Saptagiri</option>
+          <option value="Satpura">Satpura</option>
+          <option value="Shivalik">Shivalik</option>
+          <option value="Udaigiri">Udaigiri</option>
+          <option value="Vindhyachal">Vindhyachal</option>
+          <option value="Zanskar">Zanskar</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Your Kerberos ID</label>
+        <input type="text" id="pub_kerberos" name="kerberos_id" placeholder="e.g. ce1230456" required>
+      </div>
+
+      <div class="form-group">
+        <label>Category</label>
+        <select id="pub_category" name="category" required>
+          <option value="Plumbing">Plumbing</option>
+          <option value="Electrical">Electrical</option>
+          <option value="Furniture">Furniture</option>
+          <option value="Appliance">Appliance</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="pub_description" name="description" rows="2" placeholder="Describe the maintenance issue..." required></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Upload Photo</label>
+        <input type="file" id="pub_photo" name="issue_photo" accept="image/*" required>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button type="submit" id="pubSubmitBtn" style="flex: 2; background: #e74c3c;">Submit for Secretary Review</button>
+        <button type="button" onclick="closePublicIssueModal()" style="flex: 1; background: #7f8c8d;">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Lightbox Modal -->
 <div id="lightbox" class="lightbox" onclick="closeLightbox()">
   <img id="lightboxImg" src="" alt="Enlarged View">
@@ -406,6 +560,9 @@
 
   let selectedCaretakerHostel = "";
   let isCaretakerVerified = false;
+
+  let selectedSecretaryHostel = "";
+  let isSecretaryVerified = false;
 
   let isAdminVerified = false;
 
@@ -420,6 +577,9 @@
     if (role === 'student') {
       roleTag.innerText = 'Mode: Student Portal';
       switchRole('student');
+    } else if (role === 'secretary') {
+      roleTag.innerText = 'Mode: Maintenance Secretary Portal';
+      switchRole('secretary');
     } else if (role === 'caretaker') {
       roleTag.innerText = 'Mode: Caretaker Portal';
       switchRole('caretaker');
@@ -432,6 +592,53 @@
   function showLandingPage() {
     document.getElementById('landingPage').style.display = 'block';
     document.getElementById('mainPortalContent').style.display = 'none';
+  }
+
+  // --- PUBLIC ISSUE MODAL HANDLERS ---
+  function openPublicIssueModal() {
+    const typedKerberos = document.getElementById('st_kerberos_input').value.trim();
+    if (typedKerberos) {
+      document.getElementById('pub_kerberos').value = typedKerberos;
+    }
+    document.getElementById('publicIssueModal').style.display = 'flex';
+  }
+
+  function closePublicIssueModal() {
+    document.getElementById('publicIssueModal').style.display = 'none';
+    document.getElementById('publicComplaintForm').reset();
+  }
+
+  async function submitPublicComplaint(event) {
+    event.preventDefault();
+    
+    const confirmPost = confirm("Notice: Submitting without OTP means your issue must be approved by the Maintenance Secretary to prevent spam. It may take longer to reach the caretaker. Do you wish to proceed?");
+    if (!confirmPost) return;
+
+    const btn = document.getElementById('pubSubmitBtn');
+    btn.disabled = true;
+    btn.innerText = 'Submitting... Please wait';
+
+    const formData = new FormData(document.getElementById('publicComplaintForm'));
+
+    try {
+      const res = await fetch('/api/complaints/submit-public', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert("✅ " + (data.message || "Submitted successfully! Pending Maintenance Secretary approval."));
+        closePublicIssueModal();
+      } else {
+        alert(data.error || "Failed to submit public issue.");
+      }
+    } catch (err) {
+      alert("Network error while submitting issue.");
+    } finally {
+      btn.disabled = false;
+      btn.innerText = 'Submit for Secretary Review';
+    }
   }
 
   // --- DYNAMIC FILTER TOGGLE & HOSTEL FILTER VISIBILITY ---
@@ -447,13 +654,11 @@
     const subtitle = document.getElementById('dashboardSubtitle');
 
     if (filterMyIssuesOnly) {
-      // My Issues Active -> Offer button to see all, hide hostel controls
       btn.innerText = '🌐 Show All Issues';
       btn.classList.add('active');
       if (hostelGroup) hostelGroup.style.display = 'none';
       if (subtitle) subtitle.innerText = 'Viewing your reported issues';
     } else {
-      // All Issues Active -> Offer button to see my issues, show hostel controls
       btn.innerText = '👤 Show My Issues';
       btn.classList.remove('active');
       if (hostelGroup) hostelGroup.style.display = 'flex';
@@ -466,6 +671,8 @@
 
     if (role === 'student') {
       resetStudentLogin();
+    } else if (role === 'secretary') {
+      resetSecretaryLogin();
     } else if (role === 'caretaker') {
       resetCaretakerLogin();
     } else if (role === 'admin') {
@@ -476,7 +683,7 @@
   }
 
   // --- STUDENT LOGIN OTP ---
-  let currentStudentOtpToken = ""; // Variable to hold signed token
+  let currentStudentOtpToken = ""; 
 
   async function requestStudentLoginOtp() {
     const kerberos = document.getElementById('st_kerberos_input').value.trim();
@@ -499,7 +706,7 @@
 
       if (res.ok) {
         alert(`OTP sent to ${data.emailSentTo}!`);
-        currentStudentOtpToken = data.otpToken; // Store token seamlessly
+        currentStudentOtpToken = data.otpToken; 
         document.getElementById('stLoginStep1').style.display = 'none';
         document.getElementById('stLoginStep2').style.display = 'block';
         document.getElementById('stOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
@@ -545,6 +752,8 @@
       document.getElementById('activeRoleTag').innerText = `Mode: Student Portal (${loggedInKerberos})`;
       
       document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentQuickReportCard').style.display = 'none';
+      document.getElementById('secretaryLoginCard').style.display = 'none';
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
       document.getElementById('adminLoginCard').style.display = 'none';
 
@@ -570,9 +779,11 @@
     document.getElementById('st_kerberos_input').value = "";
     document.getElementById('st_login_otp_input').value = "";
     document.getElementById('studentLoginCard').style.display = 'block';
+    document.getElementById('studentQuickReportCard').style.display = 'block';
     document.getElementById('stLoginStep1').style.display = 'block';
     document.getElementById('stLoginStep2').style.display = 'none';
 
+    document.getElementById('secretaryLoginCard').style.display = 'none';
     document.getElementById('caretakerHostelSelectCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('studentFormCard').style.display = 'none';
@@ -581,6 +792,102 @@
     const btn = document.getElementById('stLoginOtpBtn');
     btn.disabled = false;
     btn.innerText = 'Send Verification OTP to Kerberos Webmail';
+  }
+
+  // --- MAINTENANCE SECRETARY LOGIN & HANDLERS ---
+  async function requestSecretaryLoginOtp() {
+    const hostel = document.getElementById('secretary_hostel_dropdown').value;
+    if (!hostel) {
+      alert('Please select your hostel first.');
+      return;
+    }
+
+    const btn = document.getElementById('secLoginOtpBtn');
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP...';
+
+    try {
+      const res = await fetch('/api/secretary/request-login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostel_name: hostel })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`OTP sent to Secretary Webmail (${data.emailSentTo})!`);
+        document.getElementById('secLoginStep1').style.display = 'none';
+        document.getElementById('secLoginStep2').style.display = 'block';
+        document.getElementById('secOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
+      } else {
+        alert(data.error || 'Failed to send login OTP.');
+        btn.disabled = false;
+        btn.innerText = 'Send Verification OTP to Webmail';
+      }
+    } catch (err) {
+      alert('Network error while requesting login OTP.');
+      btn.disabled = false;
+      btn.innerText = 'Send Verification OTP to Webmail';
+    }
+  }
+
+  async function verifySecretaryLoginOtp() {
+    const hostel = document.getElementById('secretary_hostel_dropdown').value;
+    const userOtp = document.getElementById('sec_login_otp_input').value;
+
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch('/api/secretary/verify-login-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostel_name: hostel, userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`Verified! Secretary access unlocked for ${hostel} Hostel.`);
+      selectedSecretaryHostel = hostel;
+      isSecretaryVerified = true;
+
+      document.getElementById('activeRoleTag').innerText = `Mode: Maintenance Secretary (${hostel})`;
+      document.getElementById('secretaryLoginCard').style.display = 'none';
+      document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentQuickReportCard').style.display = 'none';
+      document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('adminLoginCard').style.display = 'none';
+
+      document.getElementById('studentFormCard').style.display = 'none';
+      document.getElementById('portalFilterBar').style.display = 'none';
+      loadComplaints();
+    } else {
+      alert(data.error || 'Invalid OTP.');
+    }
+  }
+
+  function resetSecretaryLogin() {
+    selectedSecretaryHostel = "";
+    isSecretaryVerified = false;
+
+    document.getElementById('secretary_hostel_dropdown').value = "";
+    document.getElementById('secLoginStep1').style.display = 'block';
+    document.getElementById('secLoginStep2').style.display = 'none';
+    
+    document.getElementById('secretaryLoginCard').style.display = 'block';
+    document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('studentQuickReportCard').style.display = 'none';
+    document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('adminLoginCard').style.display = 'none';
+
+    document.getElementById('studentFormCard').style.display = 'none';
+    document.getElementById('portalFilterBar').style.display = 'none';
+
+    const btn = document.getElementById('secLoginOtpBtn');
+    btn.disabled = false;
+    btn.innerText = 'Send Verification OTP to Webmail';
   }
 
   // --- STUDENT DIRECT COMPLAINT SUBMISSION ---
@@ -717,6 +1024,8 @@
       document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
       document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentQuickReportCard').style.display = 'none';
+      document.getElementById('secretaryLoginCard').style.display = 'none';
       document.getElementById('adminLoginCard').style.display = 'none';
 
       document.getElementById('studentFormCard').style.display = 'none';
@@ -737,6 +1046,8 @@
     
     document.getElementById('caretakerHostelSelectCard').style.display = 'block';
     document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('studentQuickReportCard').style.display = 'none';
+    document.getElementById('secretaryLoginCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
 
     document.getElementById('studentFormCard').style.display = 'none';
@@ -837,12 +1148,14 @@
       
       document.getElementById('adminLoginCard').style.display = 'none';
       document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentQuickReportCard').style.display = 'none';
+      document.getElementById('secretaryLoginCard').style.display = 'none';
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
       document.getElementById('studentFormCard').style.display = 'none';
 
       document.getElementById('portalFilterBar').style.display = 'flex';
       document.getElementById('myIssuesToggleBtn').style.display = 'none';
-      document.getElementById('hostelFilterGroup').style.display = 'flex'; // Always visible in Admin mode
+      document.getElementById('hostelFilterGroup').style.display = 'flex'; 
       document.getElementById('dashboardTitle').innerText = 'Admin Management Console';
       document.getElementById('dashboardSubtitle').innerText = 'Full system access & hostel filters';
 
@@ -861,6 +1174,8 @@
     document.getElementById('adminLoginStep2').style.display = 'none';
 
     document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('studentQuickReportCard').style.display = 'none';
+    document.getElementById('secretaryLoginCard').style.display = 'none';
     document.getElementById('caretakerHostelSelectCard').style.display = 'none';
     document.getElementById('studentFormCard').style.display = 'none';
     document.getElementById('portalFilterBar').style.display = 'none';
@@ -905,12 +1220,13 @@
     container.innerHTML = '';
 
     if (currentRole === 'caretaker' && !isCaretakerVerified) return;
+    if (currentRole === 'secretary' && !isSecretaryVerified) return;
     if (currentRole === 'student' && !isStudentVerified) return;
     if (currentRole === 'admin' && !isAdminVerified) return;
 
     let activeHostel = (currentRole === 'student' || currentRole === 'admin') 
       ? document.getElementById('hostelFilter').value 
-      : selectedCaretakerHostel;
+      : (currentRole === 'secretary' ? selectedSecretaryHostel : selectedCaretakerHostel);
 
     const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}`);
     let data = await res.json();
@@ -919,7 +1235,6 @@
       data = data.filter(item => item.hostel_name.toLowerCase().includes(searchQuery));
     }
 
-    // --- STUDENT "MY ISSUES" FILTERING ---
     if (currentRole === 'student' && filterMyIssuesOnly) {
       if (loggedInKerberos) {
         data = data.filter(item => item.kerberos_id && item.kerberos_id.trim().toLowerCase() === loggedInKerberos.toLowerCase());
@@ -946,7 +1261,6 @@
       if (isResolved) badgeClass += ' resolved';
       if (isAutoResolved) badgeClass += ' auto-resolved';
 
-      // Render clean main status badge text and handle auto badge tag
       const displayStatus = isAutoResolved ? 'Resolved' : item.status;
       const autoTagHtml = isAutoResolved ? `<span class="auto-badge">⚡ Auto-Resolved (24h)</span>` : '';
 
@@ -1012,7 +1326,6 @@
                 <button onclick="toggleRejectBox(${item.id})" class="btn-danger" style="width:100%; margin-top:5px;">Reject Fix</button>
               </div>
 
-              <!-- Rejection Reason Sub-Form -->
               <div id="reject-box-${item.id}" style="display:none; margin-top:10px;">
                 <label style="font-size:0.85em; color:#c0392b;">Reason for Rejection:</label>
                 <textarea id="reject_reason-${item.id}" rows="2" placeholder="Describe why work is incomplete..." style="margin: 5px 0;"></textarea>

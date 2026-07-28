@@ -6700,6 +6700,8 @@
 
 // export default app;
 
+
+
 import crypto from 'crypto';
 const OTP_SECRET = process.env.OTP_SECRET || 'iitd-portal-super-secret-key-2026';
 import express from 'express';
@@ -6753,6 +6755,11 @@ const transporter = nodemailer.createTransport({
 // Helper: Caretaker Email Mapping
 function getCaretakerEmail(hostel) {
   return process.env.CARETAKER_EMAIL || "aashishraj0310@gmail.com";
+}
+
+// Helper: Maintenance Secretary Email Mapping
+function getSecretaryEmail(hostel) {
+  return process.env.SECRETARY_EMAIL || "aashishraj0310@gmail.com";
 }
 
 // Helper: Generate 6-digit OTP
@@ -6900,6 +6907,73 @@ app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
   }
 });
 
+// =================================================================
+// 1B. PUBLIC COMPLAINT SUBMISSION (NO OTP - SUBJECT TO SECRETARY APPROVAL)
+// =================================================================
+app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
+  try {
+    const { hostel_name, kerberos_id, category, description } = req.body;
+
+    if (!hostel_name || !kerberos_id || !category || !description) {
+      return res.status(400).json({ error: "All fields are required" });
+    }
+
+    const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+    const photoDataUri = uploadedFile 
+      ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+      : '';
+
+    // Insert with status 'Pending Approval'
+    const insertQuery = `
+      INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, 'Pending Approval', NOW())
+      RETURNING *;
+    `;
+    const result = await pool.query(insertQuery, [
+      kerberos_id.trim().toLowerCase(),
+      hostel_name,
+      category,
+      description,
+      photoDataUri
+    ]);
+
+    // Notify Maintenance Secretary via Email
+    try {
+      const secretaryEmail = getSecretaryEmail(hostel_name);
+      await transporter.sendMail({
+        from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+        to: secretaryEmail,
+        subject: `🚨 Unverified Complaint Review Required - ${hostel_name}`,
+        html: `
+        <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #d35400; margin-top: 0;">📋 Unverified Maintenance Ticket Submitted</h2>
+          <p style="color: #555; font-size: 14px;">A student submitted an issue without OTP verification. Your review is required before sending it to the caretaker:</p>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+            <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${hostel_name}</td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${category}</td></tr>
+            <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${kerberos_id}@iitd.ac.in</td></tr>
+            <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${description}</td></tr>
+          </table>
+
+          <p style="color: #555; font-size: 13px;">Please log into the Maintenance Secretary Portal to review and approve this issue.</p>
+        </div>
+      `
+      });
+    } catch (mailErr) {
+      console.error("Failed to send Maintenance Secretary email notification:", mailErr);
+    }
+
+    return res.json({ 
+      success: true, 
+      message: "Complaint submitted! Pending Maintenance Secretary review and approval.", 
+      complaint: result.rows[0] 
+    });
+  } catch (err) {
+    console.error("Error submitting public complaint:", err);
+    return res.status(500).json({ error: err.message || "Failed to submit public complaint" });
+  }
+});i
 
 // =================================================================
 // 2. STUDENT VERIFY OTP & POST COMPLAINT
@@ -7033,6 +7107,69 @@ app.post('/api/caretaker/verify-login-otp', async (req, res) => {
     return res.status(500).json({ error: err.message || "Verification failed" });
   }
 });
+
+// =================================================================
+// 3B. MAINTENANCE SECRETARY LOGIN OTP (REQUEST & VERIFY)
+// =================================================================
+app.post('/api/secretary/request-login-otp', async (req, res) => {
+  try {
+    const { hostel_name } = req.body;
+    if (!hostel_name) {
+      return res.status(400).json({ error: "Hostel selection is required" });
+    }
+
+    const secretaryEmail = getSecretaryEmail(hostel_name);
+    const otp = generateOTP();
+
+    otpStore.set(`secretary_login_${hostel_name}`, {
+      otp,
+      expiresAt: Date.now() + 5 * 60 * 1000
+    });
+
+    await transporter.sendMail({
+      from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+      to: secretaryEmail,
+      subject: `🔑 Maintenance Secretary Portal Access OTP - ${hostel_name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+          <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Maintenance Secretary Dashboard for <strong>${hostel_name} Hostel</strong>:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #d35400; background: #fef9e7; padding: 10px 20px; border-radius: 6px; border: 1px dashed #d35400; display: inline-block;">${otp}</span>
+          </div>
+          <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+        </div>
+      `
+    });
+
+    return res.json({ success: true, emailSentTo: secretaryEmail });
+  } catch (err) {
+    console.error("Error sending secretary login OTP:", err);
+    return res.status(500).json({ error: err.message || "Failed to send Secretary Login OTP" });
+  }
+});
+
+app.post('/api/secretary/verify-login-otp', async (req, res) => {
+  try {
+    const { hostel_name, userOtp } = req.body;
+    const storeKey = `secretary_login_${hostel_name}`;
+    const pending = otpStore.get(storeKey);
+
+    if (!pending || pending.expiresAt < Date.now()) {
+      return res.status(400).json({ error: "OTP expired or invalid" });
+    }
+
+    if (pending.otp !== String(userOtp).trim()) {
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
+
+    otpStore.delete(storeKey);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Verification failed" });
+  }
+});
+
 
 // =================================================================
 // 4. CARETAKER DIRECT FIX SUBMISSION 
