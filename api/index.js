@@ -7477,7 +7477,9 @@ app.get('/api/complaints', async (req, res) => {
     await pool.query(autoResolveQuery);
 
     // 2. Fetch complaints list
-    const { hostel, role } = req.query;
+    const { hostel } = req.query;
+    const role = (req.query.role || '').toString().trim().toLowerCase(); // <-- normalize
+
     let query = `
       SELECT 
         id,
@@ -7515,7 +7517,7 @@ app.get('/api/complaints', async (req, res) => {
 
     // Wardens ONLY see escalated tickets (> 72h old OR rejected >= 3 times)
     if (role === 'warden') {
-      query += ` 
+      query += `
         AND status = 'Pending'
         AND (
           created_at < NOW() - INTERVAL '72 hours'
