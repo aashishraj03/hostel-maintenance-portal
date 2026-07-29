@@ -6732,6 +6732,11 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Ensure fix_submitted_at column exists in complaints table
+pool.query(`
+  ALTER TABLE complaints 
+  ADD COLUMN IF NOT EXISTS fix_submitted_at TIMESTAMP;
+`).catch(err => console.error("Error adding fix_submitted_at column:", err));
 
 // --- Multer Configuration ---
 const storage = multer.memoryStorage();
@@ -7344,7 +7349,7 @@ app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
 
     const updateQuery = `
       UPDATE complaints 
-      SET status = 'Awaiting Verification', fix_photo = $1
+      SET status = 'Awaiting Verification', fix_photo = $1, fix_submitted_at = NOW()
       WHERE id = $2 
       RETURNING *;
     `;
@@ -7457,16 +7462,17 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 
 
 // =================================================================
-// 6. GET COMPLAINTS (SORTED BY STATUS PRIORITY & ROLE FILTER)
+// 6. GET COMPLAINTS (CALCULATE HOURS ONLY FROM fix_submitted_at)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
-    // 1. Auto-resolve complaints stuck in 'Awaiting%' for > 24 hours
+    // 1. STRICT AUTO-RESOLVE: Only auto-resolve if fix_submitted_at exists and is older than 24h
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
       WHERE status LIKE 'Awaiting%' 
-        AND created_at < NOW() - INTERVAL '24 hours';
+        AND fix_submitted_at IS NOT NULL
+        AND fix_submitted_at < NOW() - INTERVAL '24 hours';
     `;
     await pool.query(autoResolveQuery);
 
@@ -7485,24 +7491,25 @@ app.get('/api/complaints', async (req, res) => {
         COALESCE(rejection_count, 0) AS rejection_count,
         last_rejection_reason,
         created_at,
-        EXTRACT(EPOCH FROM (NOW() - created_at))/3600 AS hours_since_fix 
+        fix_submitted_at,
+        CASE 
+          WHEN fix_submitted_at IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - fix_submitted_at))/3600 
+          ELSE 0 
+        END AS hours_since_fix 
       FROM complaints
       WHERE 1=1
     `;
     let queryParams = [];
 
-    // Filter by Hostel if specified
     if (hostel && hostel !== 'ALL') {
       queryParams.push(hostel);
       query += ` AND hostel_name = $${queryParams.length}`;
     }
 
-    // Hide 'Pending Approval' tickets from Caretakers
     if (role === 'caretaker') {
       query += ` AND status != 'Pending Approval'`;
     }
 
-    // ORDER BY STATUS PRIORITY: Pending Approval -> Pending -> Awaiting Verification -> Resolved
     query += `
       ORDER BY 
         CASE 
