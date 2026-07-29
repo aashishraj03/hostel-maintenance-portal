@@ -6762,6 +6762,11 @@ function getSecretaryEmail(hostel) {
   return process.env.SECRETARY_EMAIL || "aashishraj0310@gmail.com";
 }
 
+// Helper: Warden Email Mapping
+function getWardenEmail(hostel) {
+  return process.env.WARDEN_EMAIL || "aashishraj0310@gmail.com";
+}
+
 // Helper: Generate 6-digit OTP
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -7259,6 +7264,69 @@ app.post('/api/secretary/action-complaint/:id', async (req, res) => {
     return res.status(500).json({ error: err.message || "Failed to process secretary action" });
   }
 });
+
+// =================================================================
+// 3D. WARDEN LOGIN OTP (REQUEST & VERIFY)
+// =================================================================
+app.post('/api/warden/request-login-otp', async (req, res) => {
+  try {
+    const { hostel_name } = req.body;
+    if (!hostel_name) {
+      return res.status(400).json({ error: "Hostel selection is required" });
+    }
+
+    const wardenEmail = getWardenEmail(hostel_name);
+    const otp = generateOTP();
+
+    otpStore.set(`warden_login_${hostel_name}`, {
+      otp,
+      expiresAt: Date.now() + 5 * 60 * 1000
+    });
+
+    await transporter.sendMail({
+      from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+      to: wardenEmail,
+      subject: `🔑 Warden Portal Access OTP - ${hostel_name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+          <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Warden Dashboard for <strong>${hostel_name} Hostel</strong>:</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0d7a5f; background: #eef9f6; padding: 10px 20px; border-radius: 6px; border: 1px dashed #0d7a5f; display: inline-block;">${otp}</span>
+          </div>
+          <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+        </div>
+      `
+    });
+
+    return res.json({ success: true, emailSentTo: wardenEmail });
+  } catch (err) {
+    console.error("Error sending warden login OTP:", err);
+    return res.status(500).json({ error: err.message || "Failed to send Warden Login OTP" });
+  }
+});
+
+app.post('/api/warden/verify-login-otp', async (req, res) => {
+  try {
+    const { hostel_name, userOtp } = req.body;
+    const storeKey = `warden_login_${hostel_name}`;
+    const pending = otpStore.get(storeKey);
+
+    if (!pending || pending.expiresAt < Date.now()) {
+      return res.status(400).json({ error: "OTP expired or invalid" });
+    }
+
+    if (pending.otp !== String(userOtp).trim()) {
+      return res.status(400).json({ error: "Invalid OTP" });
+    }
+
+    otpStore.delete(storeKey);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Verification failed" });
+  }
+});
+
 
 // =================================================================
 // 4. CARETAKER DIRECT FIX SUBMISSION 

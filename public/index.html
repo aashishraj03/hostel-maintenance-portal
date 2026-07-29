@@ -212,7 +212,6 @@
         <span>→</span>
       </button>
 
-      <!-- MAINTENANCE SECRETARY LOGIN BUTTON -->
       <button class="role-option-btn" onclick="selectRole('secretary')">
         <span>📋 Maintenance Secretary Login</span>
         <span>→</span>
@@ -220,6 +219,12 @@
 
       <button class="role-option-btn" onclick="selectRole('caretaker')">
         <span>🛠️ Caretaker Login</span>
+        <span>→</span>
+      </button>
+
+      <!-- WARDEN LOGIN BUTTON (PLACED BELOW CARETAKER) -->
+      <button class="role-option-btn" onclick="selectRole('warden')">
+        <span>🏛️ Warden Login</span>
         <span>→</span>
       </button>
 
@@ -355,6 +360,48 @@
         <div style="display: flex; gap: 10px;">
           <button onclick="verifyCaretakerLoginOtp()" style="flex: 1; background: #0288d1;">Verify OTP & Unlock Dashboard</button>
           <button onclick="resetCaretakerLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTAINER CARD 4: WARDEN LOGIN CARD (MOVED BELOW CARETAKER) -->
+    <div class="card" id="wardenLoginCard" style="display: none; background: #eef9f6; border: 1px solid #a2e8dd;">
+      <h2 style="margin-top: 0; color: #0d7a5f;">🏛️ Hostel Warden Portal</h2>
+      
+      <!-- Step 1: Select Hostel -->
+      <div id="wardenLoginStep1">
+        <div class="form-group">
+          <label style="color: #0d7a5f; font-size: 1em; margin-bottom: 8px;">Select Your Assigned Hostel:</label>
+          <select id="warden_hostel_dropdown" class="caretaker-dropdown-select" style="border-color: #0d7a5f; color: #0d7a5f;">
+            <option value="" disabled selected>-- Select Hostel --</option>
+            <option value="Aravali">Aravali</option>
+            <option value="Dronagiri">Dronagiri</option>
+            <option value="Girnar">Girnar</option>
+            <option value="Himadri">Himadri</option>
+            <option value="Jwala">Jwala</option>
+            <option value="Kailash">Kailash</option>
+            <option value="Karakoram">Karakoram</option>
+            <option value="Kumaon">Kumaon</option>
+            <option value="Nilgiri">Nilgiri</option>
+            <option value="Sahyadri">Sahyadri</option>
+            <option value="Saptagiri">Saptagiri</option>
+            <option value="Satpura">Satpura</option>
+            <option value="Shivalik">Shivalik</option>
+            <option value="Udaigiri">Udaigiri</option>
+            <option value="Vindhyachal">Vindhyachal</option>
+            <option value="Zanskar">Zanskar</option>
+          </select>
+        </div>
+        <button onclick="requestWardenLoginOtp()" id="wardenLoginOtpBtn" style="background: #0d7a5f; padding: 10px 18px;">Send Verification OTP to Warden Webmail</button>
+      </div>
+
+      <!-- Step 2: Enter OTP -->
+      <div id="wardenLoginStep2" style="display: none; margin-top: 10px; background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #a2e8dd;">
+        <label id="wardenOtpLabel" style="color: #0d7a5f; font-weight: bold;">Enter 6-Digit OTP sent to Warden Webmail:</label>
+        <input type="text" id="warden_login_otp_input" maxlength="6" placeholder="123456" style="margin: 8px 0 12px 0;">
+        <div style="display: flex; gap: 10px;">
+          <button onclick="verifyWardenLoginOtp()" style="flex: 1; background: #0d7a5f;">Verify OTP & Unlock Dashboard</button>
+          <button onclick="resetWardenLogin()" style="background: #7f8c8d; flex: 1;">Cancel</button>
         </div>
       </div>
     </div>
@@ -566,6 +613,9 @@
   let selectedSecretaryHostel = "";
   let isSecretaryVerified = false;
 
+  let selectedWardenHostel = "";
+  let isWardenVerified = false;
+
   let isAdminVerified = false;
 
   let filterMyIssuesOnly = true;
@@ -585,6 +635,9 @@
     } else if (role === 'caretaker') {
       roleTag.innerText = 'Mode: Caretaker Portal';
       switchRole('caretaker');
+    } else if (role === 'warden') {
+      roleTag.innerText = 'Mode: Warden Portal';
+      switchRole('warden');
     } else if (role === 'admin') {
       roleTag.innerText = 'Mode: Admin Portal';
       switchRole('admin');
@@ -677,6 +730,8 @@
       resetSecretaryLogin();
     } else if (role === 'caretaker') {
       resetCaretakerLogin();
+    } else if (role === 'warden') {
+      resetWardenLogin();
     } else if (role === 'admin') {
       resetAdminLogin();
     }
@@ -757,6 +812,7 @@
       document.getElementById('studentQuickReportCard').style.display = 'none';
       document.getElementById('secretaryLoginCard').style.display = 'none';
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('wardenLoginCard').style.display = 'none';
       document.getElementById('adminLoginCard').style.display = 'none';
 
       document.getElementById('studentFormCard').style.display = 'block';
@@ -787,6 +843,7 @@
 
     document.getElementById('secretaryLoginCard').style.display = 'none';
     document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('wardenLoginCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
     document.getElementById('studentFormCard').style.display = 'none';
     document.getElementById('portalFilterBar').style.display = 'none';
@@ -860,6 +917,7 @@
       document.getElementById('studentLoginCard').style.display = 'none';
       document.getElementById('studentQuickReportCard').style.display = 'none';
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('wardenLoginCard').style.display = 'none';
       document.getElementById('adminLoginCard').style.display = 'none';
 
       document.getElementById('studentFormCard').style.display = 'none';
@@ -882,6 +940,7 @@
     document.getElementById('studentLoginCard').style.display = 'none';
     document.getElementById('studentQuickReportCard').style.display = 'none';
     document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('wardenLoginCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
 
     document.getElementById('studentFormCard').style.display = 'none';
@@ -912,6 +971,104 @@
     } catch (err) {
       alert("Network error while processing secretary action.");
     }
+  }
+
+  // --- WARDEN LOGIN HANDLERS ---
+  async function requestWardenLoginOtp() {
+    const hostel = document.getElementById('warden_hostel_dropdown').value;
+    if (!hostel) {
+      alert('Please select a hostel first.');
+      return;
+    }
+
+    const btn = document.getElementById('wardenLoginOtpBtn');
+    btn.disabled = true;
+    btn.innerText = 'Sending OTP...';
+
+    try {
+      const res = await fetch('/api/warden/request-login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hostel_name: hostel })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`OTP sent to Warden Webmail (${data.emailSentTo})!`);
+        document.getElementById('wardenLoginStep1').style.display = 'none';
+        document.getElementById('wardenLoginStep2').style.display = 'block';
+        document.getElementById('wardenOtpLabel').innerText = `Enter 6-Digit OTP sent to ${data.emailSentTo}:`;
+      } else {
+        alert(data.error || 'Failed to send login OTP.');
+        btn.disabled = false;
+        btn.innerText = 'Send Verification OTP to Warden Webmail';
+      }
+    } catch (err) {
+      alert('Network error while requesting login OTP.');
+      btn.disabled = false;
+      btn.innerText = 'Send Verification OTP to Warden Webmail';
+    }
+  }
+
+  async function verifyWardenLoginOtp() {
+    const hostel = document.getElementById('warden_hostel_dropdown').value;
+    const userOtp = document.getElementById('warden_login_otp_input').value;
+
+    if (!userOtp || userOtp.length !== 6) {
+      alert('Please enter a valid 6-digit OTP.');
+      return;
+    }
+
+    const res = await fetch('/api/warden/verify-login-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostel_name: hostel, userOtp })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert(`Verified! Warden access unlocked for ${hostel} Hostel.`);
+      selectedWardenHostel = hostel;
+      isWardenVerified = true;
+
+      document.getElementById('activeRoleTag').innerText = `Mode: Warden Portal (${hostel})`;
+      document.getElementById('wardenLoginCard').style.display = 'none';
+      document.getElementById('studentLoginCard').style.display = 'none';
+      document.getElementById('studentQuickReportCard').style.display = 'none';
+      document.getElementById('secretaryLoginCard').style.display = 'none';
+      document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+      document.getElementById('adminLoginCard').style.display = 'none';
+
+      document.getElementById('studentFormCard').style.display = 'none';
+      document.getElementById('portalFilterBar').style.display = 'none';
+      loadComplaints();
+    } else {
+      alert(data.error || 'Invalid OTP.');
+    }
+  }
+
+  function resetWardenLogin() {
+    selectedWardenHostel = "";
+    isWardenVerified = false;
+
+    document.getElementById('warden_hostel_dropdown').value = "";
+    document.getElementById('wardenLoginStep1').style.display = 'block';
+    document.getElementById('wardenLoginStep2').style.display = 'none';
+    
+    document.getElementById('wardenLoginCard').style.display = 'block';
+    document.getElementById('studentLoginCard').style.display = 'none';
+    document.getElementById('studentQuickReportCard').style.display = 'none';
+    document.getElementById('secretaryLoginCard').style.display = 'none';
+    document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+    document.getElementById('adminLoginCard').style.display = 'none';
+
+    document.getElementById('studentFormCard').style.display = 'none';
+    document.getElementById('portalFilterBar').style.display = 'none';
+
+    const btn = document.getElementById('wardenLoginOtpBtn');
+    btn.disabled = false;
+    btn.innerText = 'Send Verification OTP to Warden Webmail';
   }
 
   // --- STUDENT DIRECT COMPLAINT SUBMISSION ---
@@ -1050,6 +1207,7 @@
       document.getElementById('studentLoginCard').style.display = 'none';
       document.getElementById('studentQuickReportCard').style.display = 'none';
       document.getElementById('secretaryLoginCard').style.display = 'none';
+      document.getElementById('wardenLoginCard').style.display = 'none';
       document.getElementById('adminLoginCard').style.display = 'none';
 
       document.getElementById('studentFormCard').style.display = 'none';
@@ -1072,6 +1230,7 @@
     document.getElementById('studentLoginCard').style.display = 'none';
     document.getElementById('studentQuickReportCard').style.display = 'none';
     document.getElementById('secretaryLoginCard').style.display = 'none';
+    document.getElementById('wardenLoginCard').style.display = 'none';
     document.getElementById('adminLoginCard').style.display = 'none';
 
     document.getElementById('studentFormCard').style.display = 'none';
@@ -1174,6 +1333,7 @@
       document.getElementById('studentLoginCard').style.display = 'none';
       document.getElementById('studentQuickReportCard').style.display = 'none';
       document.getElementById('secretaryLoginCard').style.display = 'none';
+      document.getElementById('wardenLoginCard').style.display = 'none';
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
       document.getElementById('studentFormCard').style.display = 'none';
 
@@ -1200,6 +1360,7 @@
     document.getElementById('studentLoginCard').style.display = 'none';
     document.getElementById('studentQuickReportCard').style.display = 'none';
     document.getElementById('secretaryLoginCard').style.display = 'none';
+    document.getElementById('wardenLoginCard').style.display = 'none';
     document.getElementById('caretakerHostelSelectCard').style.display = 'none';
     document.getElementById('studentFormCard').style.display = 'none';
     document.getElementById('portalFilterBar').style.display = 'none';
@@ -1245,12 +1406,13 @@
 
     if (currentRole === 'caretaker' && !isCaretakerVerified) return;
     if (currentRole === 'secretary' && !isSecretaryVerified) return;
+    if (currentRole === 'warden' && !isWardenVerified) return;
     if (currentRole === 'student' && !isStudentVerified) return;
     if (currentRole === 'admin' && !isAdminVerified) return;
 
     let activeHostel = (currentRole === 'student' || currentRole === 'admin') 
       ? document.getElementById('hostelFilter').value 
-      : (currentRole === 'secretary' ? selectedSecretaryHostel : selectedCaretakerHostel);
+      : (currentRole === 'secretary' ? selectedSecretaryHostel : (currentRole === 'warden' ? selectedWardenHostel : selectedCaretakerHostel));
 
     const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`);
     let data = await res.json();
