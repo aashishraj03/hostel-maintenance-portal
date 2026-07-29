@@ -6781,7 +6781,7 @@ function generateOTP() {
 const otpStore = new Map();
 
 // =================================================================
-// 0. STUDENT LOGIN OTP (REQUEST & VERIFY - STATELESS)
+// 0. STUDENT LOGIN OTP (REQUEST & VERIFY - STATELESS) 
 // =================================================================
 app.post('/api/student/request-login-otp', async (req, res) => {
   try {
@@ -6855,7 +6855,7 @@ app.post('/api/student/verify-login-otp', async (req, res) => {
 
 
 // =================================================================
-// 1. DIRECT COMPLAINT SUBMISSION (AFTER VERIFIED STUDENT LOGIN)
+// 1. DIRECT COMPLAINT SUBMISSION (AFTER VERIFIED STUDENT LOGIN) 
 // =================================================================
 app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
   try {
@@ -6918,7 +6918,7 @@ app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
 });
 
 // =================================================================
-// 1B. PUBLIC COMPLAINT SUBMISSION (NO OTP - SUBJECT TO SECRETARY APPROVAL)
+// 1B. PUBLIC COMPLAINT SUBMISSION (NO OTP - SUBJECT TO SECRETARY APPROVAL) 
 // =================================================================
 app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
   try {
@@ -6986,7 +6986,7 @@ app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
 });
 
 // =================================================================
-// 2. STUDENT VERIFY OTP & POST COMPLAINT
+// 2. STUDENT VERIFY OTP & POST COMPLAINT 
 // =================================================================
 app.post('/api/complaints/verify-submission-otp', async (req, res) => {
   try {
@@ -7057,7 +7057,7 @@ app.post('/api/complaints/verify-submission-otp', async (req, res) => {
 });
 
 // =================================================================
-// 3. CARETAKER LOGIN OTP (REQUEST & VERIFY)
+// 3. CARETAKER LOGIN OTP (REQUEST & VERIFY) 
 // =================================================================
 app.post('/api/caretaker/request-login-otp', async (req, res) => {
   try {
@@ -7119,7 +7119,7 @@ app.post('/api/caretaker/verify-login-otp', async (req, res) => {
 });
 
 // =================================================================
-// 3B. MAINTENANCE SECRETARY LOGIN OTP (REQUEST & VERIFY)
+// 3B. MAINTENANCE SECRETARY LOGIN OTP (REQUEST & VERIFY) 
 // =================================================================
 app.post('/api/secretary/request-login-otp', async (req, res) => {
   try {
@@ -7181,7 +7181,7 @@ app.post('/api/secretary/verify-login-otp', async (req, res) => {
 });
 
 // =================================================================
-// 3C. SECRETARY APPROVE / REJECT UNVERIFIED COMPLAINT
+// 3C. SECRETARY APPROVE / REJECT UNVERIFIED COMPLAINT 
 // =================================================================
 app.post('/api/secretary/action-complaint/:id', async (req, res) => {
   try {
@@ -7271,7 +7271,7 @@ app.post('/api/secretary/action-complaint/:id', async (req, res) => {
 });
 
 // =================================================================
-// 3D. WARDEN LOGIN OTP (REQUEST & VERIFY)
+// 3D. WARDEN LOGIN OTP (REQUEST & VERIFY) 
 // =================================================================
 app.post('/api/warden/request-login-otp', async (req, res) => {
   try {
@@ -7393,7 +7393,7 @@ app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
 });
 
 // =================================================================
-// 5. STUDENT DIRECT VERIFICATION / REJECTION (NO OTP REQUIRED)
+// 5. STUDENT DIRECT VERIFICATION / REJECTION (NO OTP REQUIRED) 
 // =================================================================
 app.post('/api/complaints/verify-direct/:id', async (req, res) => {
   try {
@@ -7462,17 +7462,17 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 
 
 // =================================================================
-// 6. GET COMPLAINTS (CALCULATE HOURS ONLY FROM fix_submitted_at)
+// 6. GET COMPLAINTS (UTC ACCURATE AUTO-RESOLVE & HOUR CALCULATION)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
-    // 1. STRICT AUTO-RESOLVE: Only auto-resolve if fix_submitted_at exists and is older than 24h
+    // 1. STRICT AUTO-RESOLVE: Only auto-resolve if fix_submitted_at exists and > 24 hours ago (UTC)
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
       WHERE status LIKE 'Awaiting%' 
         AND fix_submitted_at IS NOT NULL
-        AND fix_submitted_at < NOW() - INTERVAL '24 hours';
+        AND fix_submitted_at < (NOW() AT TIME ZONE 'UTC' - INTERVAL '24 hours');
     `;
     await pool.query(autoResolveQuery);
 
@@ -7493,7 +7493,8 @@ app.get('/api/complaints', async (req, res) => {
         created_at,
         fix_submitted_at,
         CASE 
-          WHEN fix_submitted_at IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW() - fix_submitted_at))/3600 
+          WHEN fix_submitted_at IS NOT NULL 
+          THEN EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'UTC') - fix_submitted_at))/3600 
           ELSE 0 
         END AS hours_since_fix 
       FROM complaints
@@ -7531,7 +7532,7 @@ app.get('/api/complaints', async (req, res) => {
 });
 
 // =================================================================
-// 7. ADMIN LOGIN OTP (REQUEST & VERIFY)
+// 7. ADMIN LOGIN OTP (REQUEST & VERIFY) 
 // =================================================================
 app.post('/api/admin/request-login-otp', async (req, res) => {
   try {

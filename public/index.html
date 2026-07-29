@@ -1433,7 +1433,7 @@
       return new Date(b.created_at) - new Date(a.created_at);
     });
 
-    
+
     // Client-side Fail-safe: Exclude 'Pending Approval' tickets from Caretaker view
     if (currentRole === 'caretaker') {
       data = data.filter(item => item.status !== 'Pending Approval');
@@ -1457,9 +1457,9 @@
     data.forEach(item => {
       const isPendingApproval = item.status === 'Pending Approval';
       const isPending = item.status === 'Pending';
-      const isVerifying = item.status.startsWith('Awaiting');
+      const isVerifying = item.status === 'Awaiting Verification';
+      const isAutoResolved = item.status === 'Resolved (Auto)';
       const isResolved = item.status.startsWith('Resolved');
-      const isAutoResolved = item.status.includes('(Auto)');
 
       let cardClass = 'complaint-card';
       if (isPendingApproval) cardClass += ' pending-approval';
