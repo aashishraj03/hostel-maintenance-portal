@@ -7462,17 +7462,17 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 
 
 // =================================================================
-// 6. GET COMPLAINTS (UTC ACCURATE AUTO-RESOLVE & HOUR CALCULATION)
+// 6. GET COMPLAINTS (WARDEN ESCALATION FILTER: >72h OR REJECTED >= 3 TIMES)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
-    // 1. STRICT AUTO-RESOLVE: Only auto-resolve if fix_submitted_at exists and > 24 hours ago (UTC)
+    // 1. Auto-resolve complaints stuck in 'Awaiting Verification' for > 24 hours
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
-      WHERE status LIKE 'Awaiting%' 
+      WHERE status = 'Awaiting Verification' 
         AND fix_submitted_at IS NOT NULL
-        AND fix_submitted_at < (NOW() AT TIME ZONE 'UTC' - INTERVAL '24 hours');
+        AND fix_submitted_at < NOW() - INTERVAL '24 hours';
     `;
     await pool.query(autoResolveQuery);
 
@@ -7494,7 +7494,7 @@ app.get('/api/complaints', async (req, res) => {
         fix_submitted_at,
         CASE 
           WHEN fix_submitted_at IS NOT NULL 
-          THEN EXTRACT(EPOCH FROM ((NOW() AT TIME ZONE 'UTC') - fix_submitted_at))/3600 
+          THEN ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - fix_submitted_at))/3600 AS numeric), 2)
           ELSE 0 
         END AS hours_since_fix 
       FROM complaints
@@ -7502,13 +7502,26 @@ app.get('/api/complaints', async (req, res) => {
     `;
     let queryParams = [];
 
+    // Filter by Hostel if specified
     if (hostel && hostel !== 'ALL') {
       queryParams.push(hostel);
       query += ` AND hostel_name = $${queryParams.length}`;
     }
 
+    // Caretakers see all active tickets
     if (role === 'caretaker') {
       query += ` AND status != 'Pending Approval'`;
+    }
+
+    // Wardens ONLY see escalated tickets (> 72h old OR rejected >= 3 times)
+    if (role === 'warden') {
+      query += ` 
+        AND status = 'Pending'
+        AND (
+          created_at < NOW() - INTERVAL '72 hours'
+          OR COALESCE(rejection_count, 0) >= 3
+        )
+      `;
     }
 
     query += `
@@ -7516,9 +7529,10 @@ app.get('/api/complaints', async (req, res) => {
         CASE 
           WHEN status = 'Pending Approval' THEN 1
           WHEN status = 'Pending' THEN 2
-          WHEN status LIKE 'Awaiting%' THEN 3
-          WHEN status LIKE 'Resolved%' THEN 4
-          ELSE 5
+          WHEN status = 'Awaiting Verification' THEN 3
+          WHEN status = 'Resolved' THEN 4
+          WHEN status = 'Resolved (Auto)' THEN 5
+          ELSE 6
         END ASC,
         created_at DESC;
     `;
@@ -7530,6 +7544,7 @@ app.get('/api/complaints', async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch complaints" });
   }
 });
+
 
 // =================================================================
 // 7. ADMIN LOGIN OTP (REQUEST & VERIFY) 
