@@ -1417,6 +1417,23 @@
     const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`);
     let data = await res.json();
 
+    // Inside loadComplaints() after parsing res.json():
+    const statusOrder = {
+      'Pending Approval': 1,
+      'Pending': 2,
+      'Awaiting Verification': 3,
+      'Resolved': 4,
+      'Resolved (Auto)': 4
+    };
+
+    data.sort((a, b) => {
+      const orderA = statusOrder[a.status] || 5;
+      const orderB = statusOrder[b.status] || 5;
+      if (orderA !== orderB) return orderA - orderB;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+
+    
     // Client-side Fail-safe: Exclude 'Pending Approval' tickets from Caretaker view
     if (currentRole === 'caretaker') {
       data = data.filter(item => item.status !== 'Pending Approval');

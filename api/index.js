@@ -7457,7 +7457,7 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 
 
 // =================================================================
-// 6. GET COMPLAINTS (FILTER UNAPPROVED ISSUES FROM CARETAKERS)
+// 6. GET COMPLAINTS (SORTED BY STATUS PRIORITY & ROLE FILTER)
 // =================================================================
 app.get('/api/complaints', async (req, res) => {
   try {
@@ -7497,12 +7497,23 @@ app.get('/api/complaints', async (req, res) => {
       query += ` AND hostel_name = $${queryParams.length}`;
     }
 
-    // CRITICAL FIX: Hide 'Pending Approval' tickets from Caretakers
+    // Hide 'Pending Approval' tickets from Caretakers
     if (role === 'caretaker') {
       query += ` AND status != 'Pending Approval'`;
     }
 
-    query += ' ORDER BY created_at DESC;';
+    // ORDER BY STATUS PRIORITY: Pending Approval -> Pending -> Awaiting Verification -> Resolved
+    query += `
+      ORDER BY 
+        CASE 
+          WHEN status = 'Pending Approval' THEN 1
+          WHEN status = 'Pending' THEN 2
+          WHEN status LIKE 'Awaiting%' THEN 3
+          WHEN status LIKE 'Resolved%' THEN 4
+          ELSE 5
+        END ASC,
+        created_at DESC;
+    `;
 
     const result = await pool.query(query, queryParams);
     return res.json(result.rows);
