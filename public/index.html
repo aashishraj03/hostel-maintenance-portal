@@ -615,6 +615,20 @@
   // /api/complaints responses when multiple loadComplaints() calls overlap.
   let complaintsRequestSeq = 0;
 
+  // FIX (speed): now that photos are Cloudinary URLs, we can ask Cloudinary
+  // to serve a small, auto-compressed thumbnail for the grid view instead
+  // of the full-resolution original. This only rewrites the URL used for
+  // the <img> src in the card grid — the original full-quality URL is still
+  // what gets opened in the lightbox on click. Non-Cloudinary URLs (e.g. old
+  // /uploads/ paths from before the Cloudinary migration) pass through
+  // unchanged.
+  function cloudinaryThumb(url) {
+    if (url && url.includes('/upload/')) {
+      return url.replace('/upload/', '/upload/w_500,q_auto,f_auto,c_limit/');
+    }
+    return url;
+  }
+
   function selectRole(role, isRestoring = false) {
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('mainPortalContent').style.display = 'block';
@@ -1599,7 +1613,7 @@
           fixImageHtml = `
             <div class="img-box">
               <span>Proof of Fix</span>
-              <img src="${fixPhotoSrc}" onclick="openLightbox('${fixPhotoSrc}')" alt="Fix Photo">
+              <img src="${cloudinaryThumb(fixPhotoSrc)}" loading="lazy" onclick="openLightbox('${fixPhotoSrc}')" alt="Fix Photo">
             </div>
           `;
         }
@@ -1701,7 +1715,7 @@
           <div class="img-preview">
             <div class="img-box">
               <span>Issue Photo</span>
-              <img src="${issuePhotoSrc}" onclick="openLightbox('${issuePhotoSrc}')" alt="Issue Photo">
+              <img src="${cloudinaryThumb(issuePhotoSrc)}" loading="lazy" onclick="openLightbox('${issuePhotoSrc}')" alt="Issue Photo">
             </div>
             ${fixImageHtml}
           </div>

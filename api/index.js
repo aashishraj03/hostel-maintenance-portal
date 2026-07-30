@@ -6702,15 +6702,957 @@
 
 
 
+// import crypto from 'crypto';
+// const OTP_SECRET = process.env.OTP_SECRET || 'iitd-portal-super-secret-key-2026';
+// import express from 'express';
+// import multer from 'multer';
+// import nodemailer from 'nodemailer';
+// import pg from 'pg';
+
+// const app = express();
+// const { Pool } = pg;
+
+// // Built-in CORS headers
+// app.use((req, res, next) => {
+//   res.setHeader('Access-Control-Allow-Origin', '*');
+//   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+//   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+//   if (req.method === 'OPTIONS') {
+//     return res.status(200).end();
+//   }
+//   next();
+// });
+
+// app.use(express.json({ limit: '4mb' }));
+// app.use(express.urlencoded({ extended: true, limit: '4mb' }));
+
+// // --- PostgreSQL Pool Setup ---
+// const pool = new Pool({
+//   connectionString: process.env.DATABASE_URL,
+//   ssl: { rejectUnauthorized: false }
+// });
+
+// // Ensure fix_submitted_at column exists in complaints table
+// pool.query(`
+//   ALTER TABLE complaints 
+//   ADD COLUMN IF NOT EXISTS fix_submitted_at TIMESTAMP;
+// `).catch(err => console.error("Error adding fix_submitted_at column:", err));
+
+// // --- Multer Configuration ---
+// const storage = multer.memoryStorage();
+// const upload = multer({
+//   storage: storage,
+//   limits: { fileSize: 3.5 * 1024 * 1024 }
+// });
+
+// // --- Nodemailer Transporter (Gmail OAuth2) ---
+// const transporter = nodemailer.createTransport({
+//   service: 'gmail',
+//   auth: {
+//     type: 'OAuth2',
+//     user: process.env.EMAIL_USER,
+//     clientId: process.env.GMAIL_CLIENT_ID,
+//     clientSecret: process.env.GMAIL_CLIENT_SECRET,
+//     refreshToken: process.env.GMAIL_REFRESH_TOKEN
+//   }
+// });
+
+// // Helper: Caretaker Email Mapping
+// function getCaretakerEmail(hostel) {
+//   return process.env.CARETAKER_EMAIL || "aashishraj0310@gmail.com";
+// }
+
+// // Helper: Maintenance Secretary Email Mapping
+// function getSecretaryEmail(hostel) {
+//   return process.env.SECRETARY_EMAIL || "aashishraj0310@gmail.com";
+// }
+
+// // Helper: Warden Email Mapping
+// function getWardenEmail(hostel) {
+//   return process.env.WARDEN_EMAIL || "aashishraj0310@gmail.com";
+// }
+
+// // Helper: Generate 6-digit OTP
+// function generateOTP() {
+//   return Math.floor(100000 + Math.random() * 900000).toString();
+// }
+
+// // In-Memory OTP Store
+// const otpStore = new Map();
+
+// // =================================================================
+// // 0. STUDENT LOGIN OTP (REQUEST & VERIFY - STATELESS) 
+// // =================================================================
+// app.post('/api/student/request-login-otp', async (req, res) => {
+//   try {
+//     const { kerberos_id } = req.body;
+//     if (!kerberos_id || !kerberos_id.trim()) {
+//       return res.status(400).json({ error: "Kerberos ID is required" });
+//     }
+
+//     const cleanKerberos = kerberos_id.trim().toLowerCase();
+//     const studentEmail = `${cleanKerberos}@iitd.ac.in`;
+//     const otp = generateOTP();
+//     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
+
+//     // Sign payload using HMAC SHA256
+//     const dataToSign = `${cleanKerberos}:${otp}:${expiresAt}`;
+//     const hash = crypto.createHmac('sha256', OTP_SECRET).update(dataToSign).digest('hex');
+//     const otpToken = `${hash}:${expiresAt}`;
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: studentEmail,
+//       subject: `🔑 Student Portal Verification OTP - ${cleanKerberos}`,
+//       html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//           <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Student Portal:</p>
+//           <div style="text-align: center; margin: 25px 0;">
+//             <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #27ae60; background: #e8f8f5; padding: 10px 20px; border-radius: 6px; border: 1px dashed #27ae60; display: inline-block;">${otp}</span>
+//           </div>
+//           <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+//         </div>
+//       `
+//     });
+
+//     return res.json({ success: true, emailSentTo: studentEmail, otpToken });
+//   } catch (err) {
+//     console.error("Error sending student login OTP:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send Student Login OTP" });
+//   }
+// });
+
+// app.post('/api/student/verify-login-otp', async (req, res) => {
+//   try {
+//     const { kerberos_id, userOtp, otpToken } = req.body;
+//     if (!kerberos_id || !userOtp || !otpToken) {
+//       return res.status(400).json({ error: "Missing required verification parameters" });
+//     }
+
+//     const cleanKerberos = kerberos_id.trim().toLowerCase();
+//     const [hash, expiresAtStr] = otpToken.split(':');
+//     const expiresAt = Number(expiresAtStr);
+
+//     if (Date.now() > expiresAt) {
+//       return res.status(400).json({ error: "OTP expired. Please request a new one." });
+//     }
+
+//     const dataToSign = `${cleanKerberos}:${String(userOtp).trim()}:${expiresAt}`;
+//     const expectedHash = crypto.createHmac('sha256', OTP_SECRET).update(dataToSign).digest('hex');
+
+//     if (hash !== expectedHash) {
+//       return res.status(400).json({ error: "Invalid OTP. Please check and try again." });
+//     }
+
+//     return res.json({ success: true, kerberos_id: cleanKerberos });
+//   } catch (err) {
+//     console.error("Error verifying OTP:", err);
+//     return res.status(500).json({ error: err.message || "Verification failed" });
+//   }
+// });
+
+
+
+// // =================================================================
+// // 1. DIRECT COMPLAINT SUBMISSION (AFTER VERIFIED STUDENT LOGIN) 
+// // =================================================================
+// app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
+//   try {
+//     const { hostel_name, kerberos_id, category, description } = req.body;
+
+//     if (!hostel_name || !kerberos_id || !category || !description) {
+//       return res.status(400).json({ error: "All fields are required" });
+//     }
+
+//     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+//     const photoDataUri = uploadedFile 
+//       ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+//       : '';
+
+//     const insertQuery = `
+//       INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
+//       VALUES ($1, $2, $3, $4, $5, 'Pending', NOW())
+//       RETURNING *;
+//     `;
+//     const result = await pool.query(insertQuery, [
+//       kerberos_id.trim().toLowerCase(),
+//       hostel_name,
+//       category,
+//       description,
+//       photoDataUri
+//     ]);
+
+//     // Notify Caretaker
+//     try {
+//       const caretakerEmail = getCaretakerEmail(hostel_name);
+//       await transporter.sendMail({
+//         from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//         to: caretakerEmail,
+//         subject: `🚨 New Maintenance Request: ${hostel_name}`,
+//         html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #e74c3c; margin-top: 0;">🚨 New Maintenance Issue Lodged</h2>
+//           <p style="color: #555; font-size: 14px;">A new maintenance complaint requires your attention:</p>
+          
+//           <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+//             <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${hostel_name}</td></tr>
+//             <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${category}</td></tr>
+//             <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${kerberos_id}@iitd.ac.in</td></tr>
+//             <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${description}</td></tr>
+//           </table>
+
+//           <p style="color: #555; font-size: 13px;">Please log into the caretaker dashboard to review details and submit resolution proof once fixed.</p>
+//         </div>
+//       `
+//       });
+//     } catch (mailErr) {
+//       console.error("Failed to send caretaker notification email:", mailErr);
+//     }
+
+//     return res.json({ success: true, complaint: result.rows[0] });
+//   } catch (err) {
+//     console.error("Error submitting direct complaint:", err);
+//     return res.status(500).json({ error: err.message || "Failed to submit complaint" });
+//   }
+// });
+
+// // =================================================================
+// // 1B. PUBLIC COMPLAINT SUBMISSION (NO OTP - SUBJECT TO SECRETARY APPROVAL) 
+// // =================================================================
+// app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
+//   try {
+//     const { hostel_name, kerberos_id, category, description } = req.body;
+
+//     if (!hostel_name || !kerberos_id || !category || !description) {
+//       return res.status(400).json({ error: "All fields are required" });
+//     }
+
+//     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+//     const photoDataUri = uploadedFile 
+//       ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+//       : '';
+
+//     // Insert with status 'Pending Approval'
+//     const insertQuery = `
+//       INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
+//       VALUES ($1, $2, $3, $4, $5, 'Pending Approval', NOW())
+//       RETURNING *;
+//     `;
+//     const result = await pool.query(insertQuery, [
+//       kerberos_id.trim().toLowerCase(),
+//       hostel_name,
+//       category,
+//       description,
+//       photoDataUri
+//     ]);
+
+//     // Notify Maintenance Secretary via Email
+//     try {
+//       const secretaryEmail = getSecretaryEmail(hostel_name);
+//       await transporter.sendMail({
+//         from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//         to: secretaryEmail,
+//         subject: `🚨 Unverified Complaint Review Required - ${hostel_name}`,
+//         html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #d35400; margin-top: 0;">📋 Unverified Maintenance Ticket Submitted</h2>
+//           <p style="color: #555; font-size: 14px;">A student submitted an issue without OTP verification. Your review is required before sending it to the caretaker:</p>
+          
+//           <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+//             <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${hostel_name}</td></tr>
+//             <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${category}</td></tr>
+//             <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${kerberos_id}@iitd.ac.in</td></tr>
+//             <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${description}</td></tr>
+//           </table>
+
+//           <p style="color: #555; font-size: 13px;">Please log into the Maintenance Secretary Portal to review and approve this issue.</p>
+//         </div>
+//       `
+//       });
+//     } catch (mailErr) {
+//       console.error("Failed to send Maintenance Secretary email notification:", mailErr);
+//     }
+
+//     return res.json({ 
+//       success: true, 
+//       message: "Complaint submitted! Pending Maintenance Secretary review and approval.", 
+//       complaint: result.rows[0] 
+//     });
+//   } catch (err) {
+//     console.error("Error submitting public complaint:", err);
+//     return res.status(500).json({ error: err.message || "Failed to submit public complaint" });
+//   }
+// });
+
+// // =================================================================
+// // 2. STUDENT VERIFY OTP & POST COMPLAINT 
+// // =================================================================
+// app.post('/api/complaints/verify-submission-otp', async (req, res) => {
+//   try {
+//     const { tempId, userOtp } = req.body;
+
+//     if (!tempId || !userOtp) {
+//       return res.status(400).json({ error: "Temp ID and OTP are required" });
+//     }
+
+//     const pending = otpStore.get(tempId);
+
+//     if (!pending || pending.expiresAt < Date.now()) {
+//       return res.status(400).json({ error: "OTP expired or invalid" });
+//     }
+
+//     if (pending.otp !== String(userOtp).trim()) {
+//       return res.status(400).json({ error: "Invalid OTP" });
+//     }
+
+//     const insertQuery = `
+//       INSERT INTO complaints (kerberos_id, hostel_name, category, description, issue_photo, status, created_at)
+//       VALUES ($1, $2, $3, $4, $5, 'Pending', NOW())
+//       RETURNING *;
+//     `;
+//     const result = await pool.query(insertQuery, [
+//       pending.kerberos_id,
+//       pending.hostel_name,
+//       pending.category,
+//       pending.description,
+//       pending.issue_photo || ''
+//     ]);
+
+//     otpStore.delete(tempId);
+
+//     // Notify Caretaker
+//     try {
+//       const caretakerEmail = getCaretakerEmail(pending.hostel_name);
+//       await transporter.sendMail({
+//         from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//         to: caretakerEmail,
+//         subject: `🚨 New Maintenance Request: ${pending.hostel_name}`,
+//         // text: `A new complaint has been lodged by student (${pending.kerberos_id}@iitd.ac.in):\n\nHostel: ${pending.hostel_name}\nCategory: ${pending.category}\nDescription: ${pending.description}`
+//         html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #e74c3c; margin-top: 0;">🚨 New Maintenance Issue Lodged</h2>
+//           <p style="color: #555; font-size: 14px;">A new maintenance complaint requires your attention:</p>
+          
+//           <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+//             <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${pending.hostel_name}</td></tr>
+//             <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${pending.category}</td></tr>
+//             <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${pending.kerberos_id}@iitd.ac.in</td></tr>
+//             <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${pending.description}</td></tr>
+//           </table>
+
+//           <p style="color: #555; font-size: 13px;">Please log into the caretaker dashboard to review details and submit resolution proof once fixed.</p>
+//         </div>
+//       `
+//       });
+//     } catch (mailErr) {
+//       console.error("Failed to send caretaker notification email:", mailErr);
+//     }
+
+//     return res.json({ success: true, complaint: result.rows[0] });
+//   } catch (err) {
+//     console.error("Error in verify-submission-otp:", err);
+//     return res.status(500).json({ error: err.message || "Failed to verify submission OTP" });
+//   }
+// });
+
+// // =================================================================
+// // 3. CARETAKER LOGIN OTP (REQUEST & VERIFY) 
+// // =================================================================
+// app.post('/api/caretaker/request-login-otp', async (req, res) => {
+//   try {
+//     const { hostel_name } = req.body;
+//     if (!hostel_name) {
+//       return res.status(400).json({ error: "Hostel selection is required" });
+//     }
+
+//     const caretakerEmail = getCaretakerEmail(hostel_name);
+//     const otp = generateOTP();
+
+//     otpStore.set(`caretaker_login_${hostel_name}`, {
+//       otp,
+//       expiresAt: Date.now() + 5 * 60 * 1000
+//     });
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: caretakerEmail,
+//       subject: `🔑 Caretaker Portal Access OTP - ${hostel_name}`,
+//       html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//           <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Caretaker Dashboard for <strong>${hostel_name} Hostel</strong>:</p>
+//           <div style="text-align: center; margin: 25px 0;">
+//             <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #2980b9; background: #ebf5fb; padding: 10px 20px; border-radius: 6px; border: 1px dashed #2980b9; display: inline-block;">${otp}</span>
+//           </div>
+//           <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+//         </div>
+//       `
+//     });
+
+//     return res.json({ success: true, emailSentTo: caretakerEmail });
+//   } catch (err) {
+//     console.error("Error sending caretaker login OTP:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send Caretaker Login OTP" });
+//   }
+// });
+
+// app.post('/api/caretaker/verify-login-otp', async (req, res) => {
+//   try {
+//     const { hostel_name, userOtp } = req.body;
+//     const storeKey = `caretaker_login_${hostel_name}`;
+//     const pending = otpStore.get(storeKey);
+
+//     if (!pending || pending.expiresAt < Date.now()) {
+//       return res.status(400).json({ error: "OTP expired or invalid" });
+//     }
+
+//     if (pending.otp !== String(userOtp).trim()) {
+//       return res.status(400).json({ error: "Invalid OTP" });
+//     }
+
+//     otpStore.delete(storeKey);
+//     return res.json({ success: true });
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message || "Verification failed" });
+//   }
+// });
+
+// // =================================================================
+// // 3B. MAINTENANCE SECRETARY LOGIN OTP (REQUEST & VERIFY) 
+// // =================================================================
+// app.post('/api/secretary/request-login-otp', async (req, res) => {
+//   try {
+//     const { hostel_name } = req.body;
+//     if (!hostel_name) {
+//       return res.status(400).json({ error: "Hostel selection is required" });
+//     }
+
+//     const secretaryEmail = getSecretaryEmail(hostel_name);
+//     const otp = generateOTP();
+
+//     otpStore.set(`secretary_login_${hostel_name}`, {
+//       otp,
+//       expiresAt: Date.now() + 5 * 60 * 1000
+//     });
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: secretaryEmail,
+//       subject: `🔑 Maintenance Secretary Portal Access OTP - ${hostel_name}`,
+//       html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//           <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Maintenance Secretary Dashboard for <strong>${hostel_name} Hostel</strong>:</p>
+//           <div style="text-align: center; margin: 25px 0;">
+//             <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #d35400; background: #fef9e7; padding: 10px 20px; border-radius: 6px; border: 1px dashed #d35400; display: inline-block;">${otp}</span>
+//           </div>
+//           <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+//         </div>
+//       `
+//     });
+
+//     return res.json({ success: true, emailSentTo: secretaryEmail });
+//   } catch (err) {
+//     console.error("Error sending secretary login OTP:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send Secretary Login OTP" });
+//   }
+// });
+
+// app.post('/api/secretary/verify-login-otp', async (req, res) => {
+//   try {
+//     const { hostel_name, userOtp } = req.body;
+//     const storeKey = `secretary_login_${hostel_name}`;
+//     const pending = otpStore.get(storeKey);
+
+//     if (!pending || pending.expiresAt < Date.now()) {
+//       return res.status(400).json({ error: "OTP expired or invalid" });
+//     }
+
+//     if (pending.otp !== String(userOtp).trim()) {
+//       return res.status(400).json({ error: "Invalid OTP" });
+//     }
+
+//     otpStore.delete(storeKey);
+//     return res.json({ success: true });
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message || "Verification failed" });
+//   }
+// });
+
+// // =================================================================
+// // 3C. SECRETARY APPROVE / REJECT UNVERIFIED COMPLAINT 
+// // =================================================================
+// app.post('/api/secretary/action-complaint/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { approve } = req.body;
+
+//     if (approve) {
+//       // Approve: Update status from 'Pending Approval' to 'Pending' so Caretaker sees it
+//       const updateResult = await pool.query(
+//         `UPDATE complaints SET status = 'Pending' WHERE id = $1 RETURNING *;`,
+//         [id]
+//       );
+
+//       if (updateResult.rows.length === 0) {
+//         return res.status(404).json({ error: "Complaint not found" });
+//       }
+
+//       const complaint = updateResult.rows[0];
+
+//       // 1. NOTIFY CARETAKER
+//       try {
+//         const caretakerEmail = getCaretakerEmail(complaint.hostel_name);
+//         await transporter.sendMail({
+//           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//           to: caretakerEmail,
+//           subject: `🚨 Approved Maintenance Request: ${complaint.hostel_name}`,
+//           html: `
+//             <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//               <h2 style="color: #27ae60; margin-top: 0;">✅ Maintenance Issue Approved by Secretary</h2>
+//               <p style="color: #555; font-size: 14px;">The Maintenance Secretary has reviewed and approved a student maintenance ticket:</p>
+              
+//               <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+//                 <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Hostel:</td><td style="padding: 8px;">${complaint.hostel_name}</td></tr>
+//                 <tr><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${complaint.category}</td></tr>
+//                 <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Student:</td><td style="padding: 8px;">${complaint.kerberos_id}@iitd.ac.in</td></tr>
+//                 <tr><td style="padding: 8px; font-weight: bold;">Description:</td><td style="padding: 8px;">${complaint.description}</td></tr>
+//               </table>
+
+//               <p style="color: #555; font-size: 13px;">Please log into the Caretaker Portal to review and upload resolution proof once fixed.</p>
+//             </div>
+//           `
+//         });
+//       } catch (mailErr) {
+//         console.error("Failed to send Caretaker email:", mailErr);
+//       }
+
+//       // 2. NOTIFY STUDENT (ISSUE RAISER)
+//       if (complaint.kerberos_id) {
+//         try {
+//           const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
+//           await transporter.sendMail({
+//             from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//             to: studentEmail,
+//             subject: `✅ Issue Approved & Forwarded - Maintenance Ticket #${complaint.id}`,
+//             html: `
+//               <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//                 <h2 style="color: #27ae60; margin-top: 0;">✅ Quick Issue Approved</h2>
+//                 <p style="color: #555; font-size: 14px;">Good news! Your maintenance ticket submitted without OTP has been reviewed and <strong>approved</strong> by your Hostel Maintenance Secretary.</p>
+                
+//                 <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+//                   <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold; width: 30%;">Ticket ID:</td><td style="padding: 8px;">#${complaint.id}</td></tr>
+//                   <tr><td style="padding: 8px; font-weight: bold;">Hostel:</td><td style="padding: 8px;">${complaint.hostel_name}</td></tr>
+//                   <tr style="background: #f8f9fa;"><td style="padding: 8px; font-weight: bold;">Category:</td><td style="padding: 8px;">${complaint.category}</td></tr>
+//                   <tr><td style="padding: 8px; font-weight: bold;">Status:</td><td style="padding: 8px; color: #27ae60; font-weight: bold;">Forwarded to Caretaker</td></tr>
+//                 </table>
+
+//                 <p style="color: #555; font-size: 13px;">Your ticket is now active on the caretaker dashboard for repair.</p>
+//               </div>
+//             `
+//           });
+//         } catch (studentMailErr) {
+//           console.error("Failed to send Student approval email:", studentMailErr);
+//         }
+//       }
+
+//       return res.json({ success: true, message: "Complaint approved and notifications sent to Caretaker and Student!" });
+
+//     } else {
+//       // Reject: Remove unverified complaint from database
+//       await pool.query(`DELETE FROM complaints WHERE id = $1;`, [id]);
+//       return res.json({ success: true, message: "Complaint rejected and removed." });
+//     }
+//   } catch (err) {
+//     console.error("Error in secretary action:", err);
+//     return res.status(500).json({ error: err.message || "Failed to process secretary action" });
+//   }
+// });
+
+// // =================================================================
+// // 3D. WARDEN LOGIN OTP (REQUEST & VERIFY) 
+// // =================================================================
+// app.post('/api/warden/request-login-otp', async (req, res) => {
+//   try {
+//     const { hostel_name } = req.body;
+//     if (!hostel_name) {
+//       return res.status(400).json({ error: "Hostel selection is required" });
+//     }
+
+//     const wardenEmail = getWardenEmail(hostel_name);
+//     const otp = generateOTP();
+
+//     otpStore.set(`warden_login_${hostel_name}`, {
+//       otp,
+//       expiresAt: Date.now() + 5 * 60 * 1000
+//     });
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: wardenEmail,
+//       subject: `🔑 Warden Portal Access OTP - ${hostel_name}`,
+//       html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//           <p style="color: #555; font-size: 14px;">Use the following OTP to log into the Warden Dashboard for <strong>${hostel_name} Hostel</strong>:</p>
+//           <div style="text-align: center; margin: 25px 0;">
+//             <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #0d7a5f; background: #eef9f6; padding: 10px 20px; border-radius: 6px; border: 1px dashed #0d7a5f; display: inline-block;">${otp}</span>
+//           </div>
+//           <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+//         </div>
+//       `
+//     });
+
+//     return res.json({ success: true, emailSentTo: wardenEmail });
+//   } catch (err) {
+//     console.error("Error sending warden login OTP:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send Warden Login OTP" });
+//   }
+// });
+
+// app.post('/api/warden/verify-login-otp', async (req, res) => {
+//   try {
+//     const { hostel_name, userOtp } = req.body;
+//     const storeKey = `warden_login_${hostel_name}`;
+//     const pending = otpStore.get(storeKey);
+
+//     if (!pending || pending.expiresAt < Date.now()) {
+//       return res.status(400).json({ error: "OTP expired or invalid" });
+//     }
+
+//     if (pending.otp !== String(userOtp).trim()) {
+//       return res.status(400).json({ error: "Invalid OTP" });
+//     }
+
+//     otpStore.delete(storeKey);
+//     return res.json({ success: true });
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message || "Verification failed" });
+//   }
+// });
+
+
+// // =================================================================
+// // 4. CARETAKER DIRECT FIX SUBMISSION 
+// // =================================================================
+// app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
+
+//     if (!uploadedFile) {
+//       return res.status(400).json({ error: "Proof photo is required" });
+//     }
+
+//     const fixPhotoDataUri = `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}`;
+
+//     const updateQuery = `
+//       UPDATE complaints 
+//       SET status = 'Awaiting Verification', fix_photo = $1, fix_submitted_at = NOW()
+//       WHERE id = $2 
+//       RETURNING *;
+//     `;
+//     const updateResult = await pool.query(updateQuery, [fixPhotoDataUri, id]);
+
+//     if (updateResult.rows.length === 0) {
+//       return res.status(404).json({ error: "Complaint not found" });
+//     }
+
+//     const complaint = updateResult.rows[0];
+
+//     // Notify Student
+//     if (complaint && complaint.kerberos_id) {
+//       try {
+//         const studentEmail = `${complaint.kerberos_id}@iitd.ac.in`;
+//         await transporter.sendMail({
+//           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//           to: studentEmail,
+//           subject: `🔧 Maintenance Issue #${id} Fixed - Verification Required`,
+//           html: `
+//           <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//             <h2 style="color: #27ae60; margin-top: 0;">🔧 Work Completed on Issue #${id}</h2>
+//             <p style="color: #555; font-size: 14px;">The caretaker has uploaded proof of resolution for your maintenance complaint.</p>
+//             <p style="color: #555; font-size: 14px;">Please log into the student portal to review the proof photo and either <strong>Confirm</strong> or <strong>Reject</strong> the resolution.</p>
+//             <div style="margin: 20px 0; text-align: center;">
+//               <span style="background: #fff8e1; color: #d35400; padding: 8px 12px; border-radius: 4px; font-size: 13px; font-weight: bold;">⚠️ Auto-resolves in 24 hours if no action is taken.</span>
+//             </div>
+//           </div>
+//         `
+//         });
+//       } catch (mailErr) {
+//         console.error("Failed to send student notification email:", mailErr);
+//       }
+//     }
+
+//     return res.json({ success: true, complaint });
+//   } catch (err) {
+//     console.error("Error submitting fix:", err);
+//     return res.status(500).json({ error: err.message || "Failed to submit fix" });
+//   }
+// });
+
+// // =================================================================
+// // 5. STUDENT DIRECT VERIFICATION / REJECTION (NO OTP REQUIRED) 
+// // =================================================================
+// app.post('/api/complaints/verify-direct/:id', async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { approved, rejection_reason } = req.body;
+
+//     let updateQuery = '';
+//     let queryParams = [];
+
+//     if (approved) {
+//       updateQuery = `UPDATE complaints SET status = 'Resolved' WHERE id = $1 RETURNING *;`;
+//       queryParams = [id];
+//     } else {
+//       updateQuery = `
+//         UPDATE complaints 
+//         SET status = 'Pending', 
+//             rejection_count = COALESCE(rejection_count, 0) + 1, 
+//             last_rejection_reason = $1 
+//         WHERE id = $2 
+//         RETURNING *;
+//       `;
+//       queryParams = [rejection_reason || 'No specific reason given.', id];
+//     }
+
+//     const updateResult = await pool.query(updateQuery, queryParams);
+    
+//     if (updateResult.rows.length === 0) {
+//       return res.status(404).json({ error: "Complaint not found" });
+//     }
+
+//     const updatedComplaint = updateResult.rows[0];
+
+//     // SEND REJECTION EMAIL TO CARETAKER IF REJECTED
+//     if (!approved && updatedComplaint) {
+//       try {
+//         const caretakerEmail = getCaretakerEmail(updatedComplaint.hostel_name);
+//         await transporter.sendMail({
+//           from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//           to: caretakerEmail,
+//           subject: `⚠️ Issue #${id} Fix Rejected by Student (${updatedComplaint.hostel_name})`,
+//           html: `
+//           <div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//             <h2 style="color: #c0392b; margin-top: 0;">⚠️ Resolution Rejected by Student</h2>
+//             <p style="color: #555; font-size: 14px;">The student (${updatedComplaint.kerberos_id}@iitd.ac.in) has <strong>rejected</strong> the fix provided for <strong>Issue #${id}</strong>.</p>
+            
+//             <div style="background: #fdf2e9; border-left: 4px solid #e67e22; padding: 12px; margin: 15px 0; font-size: 14px; color: #a04000;">
+//               <strong>Student Reason:</strong> "${rejection_reason || 'No specific reason given.'}"
+//             </div>
+
+//             <p style="color: #555; font-size: 13px;">The issue status has been reset to <strong>Pending</strong>. Please inspect and resolve the issue.</p>
+//           </div>
+//         `
+//         });
+//       } catch (mailErr) {
+//         console.error("Failed to send caretaker rejection notification:", mailErr);
+//       }
+//     }
+
+//     return res.json({ success: true, complaint: updatedComplaint });
+
+//   } catch (err) {
+//     console.error("Error in verify-direct:", err);
+//     return res.status(500).json({ error: err.message || "Failed to process verification" });
+//   }
+// });
+
+
+// // =================================================================
+// // 6. GET COMPLAINTS (WARDEN ESCALATION FILTER: >72h OR REJECTED >= 3 TIMES)
+// // =================================================================
+// app.get('/api/complaints', async (req, res) => {
+//   try {
+//     // 1. Auto-resolve complaints stuck in 'Awaiting Verification' for > 24 hours
+//     const autoResolveQuery = `
+//       UPDATE complaints 
+//       SET status = 'Resolved (Auto)' 
+//       WHERE status = 'Awaiting Verification' 
+//         AND fix_submitted_at IS NOT NULL
+//         AND fix_submitted_at < NOW() - INTERVAL '24 hours';
+//     `;
+//     await pool.query(autoResolveQuery);
+
+//     // 2. Fetch complaints list
+//     const { hostel } = req.query;
+//     const role = (req.query.role || '').toString().trim().toLowerCase(); // <-- normalize
+
+//     let query = `
+//       SELECT 
+//         id,
+//         kerberos_id,
+//         hostel_name,
+//         category,
+//         description,
+//         COALESCE(issue_photo, '') AS issue_photo,
+//         COALESCE(fix_photo, '') AS fix_photo,
+//         COALESCE(status, 'Pending') AS status,
+//         COALESCE(rejection_count, 0) AS rejection_count,
+//         last_rejection_reason,
+//         created_at,
+//         fix_submitted_at,
+//         CASE 
+//           WHEN fix_submitted_at IS NOT NULL 
+//           THEN ROUND(CAST(EXTRACT(EPOCH FROM (NOW() - fix_submitted_at))/3600 AS numeric), 2)
+//           ELSE 0 
+//         END AS hours_since_fix 
+//       FROM complaints
+//       WHERE 1=1
+//     `;
+//     let queryParams = [];
+
+//     // Filter by Hostel if specified
+//     if (hostel && hostel !== 'ALL') {
+//       queryParams.push(hostel);
+//       query += ` AND hostel_name = $${queryParams.length}`;
+//     }
+
+//     // Caretakers see all active tickets
+//     if (role === 'caretaker') {
+//       query += ` AND status != 'Pending Approval'`;
+//     }
+
+//     // Wardens ONLY see escalated tickets (> 72h old OR rejected >= 3 times)
+//     if (role === 'warden') {
+//       query += `
+//         AND status = 'Pending'
+//         AND (
+//           created_at < NOW() - INTERVAL '72 hours'
+//           OR COALESCE(rejection_count, 0) >= 3
+//         )
+//       `;
+//     }
+
+//     query += `
+//       ORDER BY 
+//         CASE 
+//           WHEN status = 'Pending Approval' THEN 1
+//           WHEN status = 'Pending' THEN 2
+//           WHEN status = 'Awaiting Verification' THEN 3
+//           WHEN status = 'Resolved' THEN 4
+//           WHEN status = 'Resolved (Auto)' THEN 5
+//           ELSE 6
+//         END ASC,
+//         created_at DESC;
+//     `;
+
+//     const result = await pool.query(query, queryParams);
+//     return res.json(result.rows);
+//   } catch (err) {
+//     console.error("Error fetching complaints:", err);
+//     return res.status(500).json({ error: "Failed to fetch complaints" });
+//   }
+// });
+
+
+// // =================================================================
+// // 7. ADMIN LOGIN OTP (REQUEST & VERIFY) 
+// // =================================================================
+// app.post('/api/admin/request-login-otp', async (req, res) => {
+//   try {
+//     const adminEmail = process.env.EMAIL_USER; // Uses hosting mail address directly
+//     const otp = generateOTP();
+
+//     otpStore.set('admin_login_session', {
+//       otp,
+//       expiresAt: Date.now() + 5 * 60 * 1000
+//     });
+
+//     await transporter.sendMail({
+//       from: `"Hostel Maintenance Portal" <${process.env.EMAIL_USER}>`,
+//       to: adminEmail,
+//       subject: `🔑 Master Admin Access OTP`,
+//       html: `
+//         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+//           <h2 style="color: #2c3e50; margin-top: 0;">Campus Maintenance Portal</h2>
+//           <p style="color: #555; font-size: 14px;">Use the following OTP to log into the <strong>Master Admin Console</strong>:</p>
+//           <div style="text-align: center; margin: 25px 0;">
+//             <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #8e44ad; background: #f5eeed; padding: 10px 20px; border-radius: 6px; border: 1px dashed #8e44ad; display: inline-block;">${otp}</span>
+//           </div>
+//           <p style="color: #7f8c8d; font-size: 13px;">This OTP is valid for <strong>5 minutes</strong>.</p>
+//         </div>
+//       `
+//     });
+
+//     return res.json({ success: true, emailSentTo: adminEmail });
+//   } catch (err) {
+//     console.error("Error sending admin login OTP:", err);
+//     return res.status(500).json({ error: err.message || "Failed to send Admin Login OTP" });
+//   }
+// });
+
+// app.post('/api/admin/verify-login-otp', async (req, res) => {
+//   try {
+//     const { userOtp } = req.body;
+//     const storeKey = 'admin_login_session';
+//     const pending = otpStore.get(storeKey);
+
+//     if (!pending || pending.expiresAt < Date.now()) {
+//       return res.status(400).json({ error: "OTP expired or invalid" });
+//     }
+
+//     if (pending.otp !== String(userOtp).trim()) {
+//       return res.status(400).json({ error: "Invalid OTP" });
+//     }
+
+//     otpStore.delete(storeKey);
+//     return res.json({ success: true });
+//   } catch (err) {
+//     return res.status(500).json({ error: err.message || "Verification failed" });
+//   }
+// });
+
+
+// // Multer error handling middleware
+// app.use((err, req, res, next) => {
+//   if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+//     return res.status(400).json({ error: "Image size too large. Maximum limit is 3.5 MB." });
+//   }
+//   return res.status(500).json({ error: err.message || "Internal Server Error" });
+// });
+
+// export default app;
+
+
 import crypto from 'crypto';
 const OTP_SECRET = process.env.OTP_SECRET || 'iitd-portal-super-secret-key-2026';
 import express from 'express';
 import multer from 'multer';
 import nodemailer from 'nodemailer';
 import pg from 'pg';
+import { v2 as cloudinary } from 'cloudinary';
 
 const app = express();
 const { Pool } = pg;
+
+// --- Cloudinary Configuration ---
+// FIX (speed): images used to be base64-encoded and stored directly in
+// Postgres text columns, which meant every /api/complaints call had to
+// ship every photo's full bytes (inflated ~33% by base64) as JSON. Now we
+// upload the buffer to Cloudinary once at submission time and store only
+// the short secure_url string in the DB — rows and API responses shrink
+// from megabytes to a few hundred bytes per photo.
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+function uploadToCloudinary(buffer, folder) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: 'image' },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
+}
 
 // Built-in CORS headers
 app.use((req, res, next) => {
@@ -6737,6 +7679,32 @@ pool.query(`
   ALTER TABLE complaints 
   ADD COLUMN IF NOT EXISTS fix_submitted_at TIMESTAMP;
 `).catch(err => console.error("Error adding fix_submitted_at column:", err));
+
+// FIX (speed): these indexes back every WHERE clause used in GET
+// /api/complaints (hostel filter, caretaker/warden role filters, the
+// auto-resolve UPDATE, and the ORDER BY created_at) so Postgres can use an
+// index scan instead of a sequential scan on every single request.
+pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_complaints_hostel_status
+  ON complaints (hostel_name, status);
+`).catch(err => console.error("Error creating idx_complaints_hostel_status:", err));
+
+pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_complaints_created_at
+  ON complaints (created_at DESC);
+`).catch(err => console.error("Error creating idx_complaints_created_at:", err));
+
+pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_complaints_awaiting_fix_submitted
+  ON complaints (fix_submitted_at)
+  WHERE status = 'Awaiting Verification';
+`).catch(err => console.error("Error creating idx_complaints_awaiting_fix_submitted:", err));
+
+pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_complaints_warden_escalation
+  ON complaints (created_at, rejection_count)
+  WHERE status = 'Pending';
+`).catch(err => console.error("Error creating idx_complaints_warden_escalation:", err));
 
 // --- Multer Configuration ---
 const storage = multer.memoryStorage();
@@ -6866,8 +7834,10 @@ app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
     }
 
     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
-    const photoDataUri = uploadedFile 
-      ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+    // FIX (speed): upload to Cloudinary and store the short URL instead of
+    // a multi-MB base64 data URI.
+    const photoUrl = uploadedFile
+      ? await uploadToCloudinary(uploadedFile.buffer, 'campus-maintenance/issues')
       : '';
 
     const insertQuery = `
@@ -6880,7 +7850,7 @@ app.post('/api/complaints/submit-direct', upload.any(), async (req, res) => {
       hostel_name,
       category,
       description,
-      photoDataUri
+      photoUrl
     ]);
 
     // Notify Caretaker
@@ -6929,8 +7899,9 @@ app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
     }
 
     const uploadedFile = req.files && req.files.length > 0 ? req.files[0] : null;
-    const photoDataUri = uploadedFile 
-      ? `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}` 
+    // FIX (speed): Cloudinary URL instead of base64 data URI.
+    const photoUrl = uploadedFile
+      ? await uploadToCloudinary(uploadedFile.buffer, 'campus-maintenance/issues')
       : '';
 
     // Insert with status 'Pending Approval'
@@ -6944,7 +7915,7 @@ app.post('/api/complaints/submit-public', upload.any(), async (req, res) => {
       hostel_name,
       category,
       description,
-      photoDataUri
+      photoUrl
     ]);
 
     // Notify Maintenance Secretary via Email
@@ -7345,7 +8316,8 @@ app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
       return res.status(400).json({ error: "Proof photo is required" });
     }
 
-    const fixPhotoDataUri = `data:${uploadedFile.mimetype};base64,${uploadedFile.buffer.toString('base64')}`;
+    // FIX (speed): Cloudinary URL instead of base64 data URI.
+    const fixPhotoUrl = await uploadToCloudinary(uploadedFile.buffer, 'campus-maintenance/fixes');
 
     const updateQuery = `
       UPDATE complaints 
@@ -7353,7 +8325,7 @@ app.post('/api/complaints/submit-fix/:id', upload.any(), async (req, res) => {
       WHERE id = $2 
       RETURNING *;
     `;
-    const updateResult = await pool.query(updateQuery, [fixPhotoDataUri, id]);
+    const updateResult = await pool.query(updateQuery, [fixPhotoUrl, id]);
 
     if (updateResult.rows.length === 0) {
       return res.status(404).json({ error: "Complaint not found" });
@@ -7467,6 +8439,8 @@ app.post('/api/complaints/verify-direct/:id', async (req, res) => {
 app.get('/api/complaints', async (req, res) => {
   try {
     // 1. Auto-resolve complaints stuck in 'Awaiting Verification' for > 24 hours
+    // FIX (speed): backed by idx_complaints_awaiting_fix_submitted now, so
+    // this no longer sequential-scans the whole table on every GET.
     const autoResolveQuery = `
       UPDATE complaints 
       SET status = 'Resolved (Auto)' 
