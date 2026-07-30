@@ -611,6 +611,10 @@
 
   let filterMyIssuesOnly = true;
 
+  // Monotonically increasing sequence number used to discard stale
+  // /api/complaints responses when multiple loadComplaints() calls overlap.
+  let complaintsRequestSeq = 0;
+
   function selectRole(role, isRestoring = false) {
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('mainPortalContent').style.display = 'block';
@@ -1472,11 +1476,15 @@
   }
 
   // OPTIMIZED LOAD COMPLAINTS WITH STRICT CLIENT-SIDE ISOLATION FAILSAFE
+  // FIX: guarded with a request sequence number so overlapping/out-of-order
+  // calls to loadComplaints() can no longer double-render cards or let a
+  // stale response (e.g. from a previous hostel filter) overwrite a newer one.
   async function loadComplaints(searchQuery = '') {
     const container = document.getElementById('complaintsList');
-    
-    // Always clear container first to prevent DOM element accumulation
-    container.innerHTML = '';
+
+    // Stamp this invocation. If a newer call starts before this one
+    // finishes, this call's response will be discarded below.
+    const mySeq = ++complaintsRequestSeq;
 
     if (currentRole === 'caretaker' && !isCaretakerVerified) return;
     if (currentRole === 'secretary' && !isSecretaryVerified) return;
@@ -1501,6 +1509,10 @@
     try {
       const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`);
       let data = await res.json();
+
+      // A newer loadComplaints() call has since started — this response
+      // is stale, so drop it instead of rendering/clearing the DOM with it.
+      if (mySeq !== complaintsRequestSeq) return;
 
       if (!Array.isArray(data)) {
         data = [];
@@ -1541,6 +1553,12 @@
           data = data.filter(item => item.kerberos_id && item.kerberos_id.trim().toLowerCase() === loggedInKerberos.toLowerCase());
         }
       }
+
+      // Only now — right before we actually render — do we clear the
+      // container. Doing this earlier (at the top of the function) is
+      // what allowed two overlapping calls to both append into an
+      // already-cleared grid, producing duplicate cards.
+      container.innerHTML = '';
 
       if (data.length === 0) {
         container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 8px; color: #777;">No complaints found.</div>`;
@@ -1694,6 +1712,8 @@
         container.appendChild(card);
       });
     } catch (err) {
+      // Also drop error handling for a stale, superseded call.
+      if (mySeq !== complaintsRequestSeq) return;
       console.error("Error loading complaints:", err);
       container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 8px; color: #c0392b;">Failed to load complaints. Please check your network connection.</div>`;
     }
@@ -1712,6 +1732,10 @@
   }
 
   // Restore session on reload
+  // FIX: removed the redundant trailing loadComplaints() call that used to
+  // fire in addition to the one already triggered inside selectRole() /
+  // switchRole() for each branch below — that duplicate call was the main
+  // source of the "every issue appears twice" bug.
   window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roleFromUrl = urlParams.get('role');
@@ -1795,9 +1819,9 @@
 
       if (!hasSession) {
         selectRole(roleFromUrl, false);
-      } else {
-        loadComplaints();
       }
+      // Note: when hasSession is true, selectRole(role, true) above already
+      // triggered loadComplaints() via switchRole(). No extra call needed here.
     }
   });
 </script>
