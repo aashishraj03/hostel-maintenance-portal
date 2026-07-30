@@ -207,31 +207,31 @@
     <p class="landing-subtitle">Indian Institute of Technology Delhi</p>
 
     <div class="role-options-container">
-      <button class="role-option-btn" onclick="selectRole('student')">
+      <a href="?role=student" target="_blank" class="role-option-btn" style="text-decoration: none;">
         <span>🎓 I'm a Student</span>
         <span>→</span>
-      </button>
+      </a>
 
-      <button class="role-option-btn" onclick="selectRole('secretary')">
+      <a href="?role=secretary" target="_blank" class="role-option-btn" style="text-decoration: none;">
         <span>📋 Maintenance Secretary Login</span>
         <span>→</span>
-      </button>
+      </a>
 
-      <button class="role-option-btn" onclick="selectRole('caretaker')">
+      <a href="?role=caretaker" target="_blank" class="role-option-btn" style="text-decoration: none;">
         <span>🛠️ Caretaker Login</span>
         <span>→</span>
-      </button>
+      </a>
 
       <!-- WARDEN LOGIN BUTTON (PLACED BELOW CARETAKER) -->
-      <button class="role-option-btn" onclick="selectRole('warden')">
+      <a href="?role=warden" target="_blank" class="role-option-btn" style="text-decoration: none;">
         <span>🏛️ Warden Login</span>
         <span>→</span>
-      </button>
+      </a>
 
-      <button class="role-option-btn" onclick="selectRole('admin')">
+      <a href="?role=admin" target="_blank" class="role-option-btn" style="text-decoration: none;">
         <span>🔑 Admin Login</span>
         <span>→</span>
-      </button>
+      </a>
     </div>
   </div>
 
@@ -1605,6 +1605,15 @@
       step1.style.display = 'block';
     }
   }
+
+  // Auto-open requested portal role when page opens in a new tab via URL parameter
+  window.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const roleFromUrl = urlParams.get('role');
+    if (roleFromUrl) {
+      selectRole(roleFromUrl);
+    }
+  });
 </script>
 
 </body>
