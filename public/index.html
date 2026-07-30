@@ -497,7 +497,7 @@
         <small style="color: #cbd5e1;" id="dashboardSubtitle">Viewing your reported issues</small>
       </div>
       <div class="filter-controls">
-        <!-- Toggle Filter Button (Student / Caretaker) -->
+        <!-- Toggle Filter Button (Student / Caretaker / Warden) -->
         <button type="button" class="filter-btn active" id="myIssuesToggleBtn" onclick="toggleMyIssuesFilter()">
           🌐 Show All Hostels
         </button>
@@ -755,6 +755,20 @@
         if (hostelFilterSelect) hostelFilterSelect.value = selectedCaretakerHostel;
       } else {
         btn.innerText = `🛠️ Show My Hostel (${selectedCaretakerHostel})`;
+        btn.classList.remove('active');
+        if (hostelGroup) hostelGroup.style.display = 'flex';
+        if (subtitle) subtitle.innerText = 'Viewing all campus issues';
+        if (hostelFilterSelect) hostelFilterSelect.value = 'ALL';
+      }
+    } else if (currentRole === 'warden') {
+      if (filterMyIssuesOnly) {
+        btn.innerText = '🌐 Show All Hostels';
+        btn.classList.add('active');
+        if (hostelGroup) hostelGroup.style.display = 'none';
+        if (subtitle) subtitle.innerText = `Viewing ${selectedWardenHostel} Hostel escalated issues`;
+        if (hostelFilterSelect) hostelFilterSelect.value = selectedWardenHostel;
+      } else {
+        btn.innerText = `🏛️ Show My Hostel (${selectedWardenHostel})`;
         btn.classList.remove('active');
         if (hostelGroup) hostelGroup.style.display = 'flex';
         if (subtitle) subtitle.innerText = 'Viewing all campus issues';
@@ -1099,13 +1113,13 @@
 
       document.getElementById('studentFormCard').style.display = 'none';
       
-      // SHOW HOSTEL FILTER BAR FOR WARDEN
+      // SHOW HOSTEL FILTER BAR FOR WARDEN WITH TOGGLE
       document.getElementById('portalFilterBar').style.display = 'flex';
-      document.getElementById('myIssuesToggleBtn').style.display = 'none';
-      document.getElementById('hostelFilterGroup').style.display = 'flex';
+      document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
       document.getElementById('dashboardTitle').innerText = 'Warden Escalation Console';
-      document.getElementById('dashboardSubtitle').innerText = `Default view: ${hostel} Hostel (Escalated Issues)`;
-      document.getElementById('hostelFilter').value = hostel;
+      
+      filterMyIssuesOnly = true;
+      updateFilterUI();
 
       loadComplaints();
     } else {
@@ -1117,6 +1131,7 @@
     localStorage.removeItem('warden_session');
     selectedWardenHostel = "";
     isWardenVerified = false;
+    filterMyIssuesOnly = true;
 
     document.getElementById('warden_hostel_dropdown').value = "";
     document.getElementById('wardenLoginStep1').style.display = 'block';
@@ -1502,9 +1517,11 @@
     
     if (currentRole === 'caretaker') {
       activeHostel = filterMyIssuesOnly ? selectedCaretakerHostel : document.getElementById('hostelFilter').value;
+    } else if (currentRole === 'warden') {
+      activeHostel = filterMyIssuesOnly ? selectedWardenHostel : document.getElementById('hostelFilter').value;
     } else if (currentRole === 'student') {
       activeHostel = document.getElementById('hostelFilter').value;
-    } else if (currentRole === 'admin' || currentRole === 'warden') {
+    } else if (currentRole === 'admin') {
       activeHostel = document.getElementById('hostelFilter').value;
     } else if (currentRole === 'secretary') {
       activeHostel = selectedSecretaryHostel;
@@ -1768,11 +1785,10 @@
           document.getElementById('wardenLoginCard').style.display = 'none';
 
           document.getElementById('portalFilterBar').style.display = 'flex';
-          document.getElementById('myIssuesToggleBtn').style.display = 'none';
-          document.getElementById('hostelFilterGroup').style.display = 'flex';
+          document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
           document.getElementById('dashboardTitle').innerText = 'Warden Escalation Console';
-          document.getElementById('dashboardSubtitle').innerText = `Default view: ${saved.hostel} Hostel (Escalated Issues)`;
-          document.getElementById('hostelFilter').value = saved.hostel;
+          filterMyIssuesOnly = true;
+          updateFilterUI();
         }
       } else if (roleFromUrl === 'admin') {
         const saved = JSON.parse(sessionStorage.getItem('admin_session') || '{}');
