@@ -1595,19 +1595,26 @@
         }
       }
       else if (currentRole === 'caretaker') {
+        // Check if complaint belongs to the logged-in caretaker's assigned hostel
+        const isMyHostel = item.hostel_name && item.hostel_name.trim().toLowerCase() === selectedCaretakerHostel.trim().toLowerCase();
+
         if (isPending) {
-          actionAreaHtml = `
-            <div class="action-box">
-              <h4 style="margin: 0 0 8px 0;">Caretaker Resolution Action</h4>
-              <form onsubmit="submitCaretakerFixDirect(event, ${item.id})">
-                <div class="form-group">
-                  <label>Upload Proof Photo</label>
-                  <input type="file" id="fix_photo-${item.id}" accept="image/*" required>
-                </div>
-                <button type="submit" id="caretaker-sub-btn-${item.id}" style="width:100%; background: #2980b9;">Submit Resolution Proof</button>
-              </form>
-            </div>
-          `;
+          if (isMyHostel) {
+            actionAreaHtml = `
+              <div class="action-box">
+                <h4 style="margin: 0 0 8px 0;">Caretaker Resolution Action</h4>
+                <form onsubmit="submitCaretakerFixDirect(event, ${item.id})">
+                  <div class="form-group">
+                    <label>Upload Proof Photo</label>
+                    <input type="file" id="fix_photo-${item.id}" accept="image/*" required>
+                  </div>
+                  <button type="submit" id="caretaker-sub-btn-${item.id}" style="width:100%; background: #2980b9;">Submit Resolution Proof</button>
+                </form>
+              </div>
+            `;
+          } else {
+            actionAreaHtml = `<div style="font-size:0.82em; color:#7f8c8d; margin-top:10px; background:#f8f9fa; padding:8px; border-radius:4px; text-align:center;">🔒 Read-Only (Assigned to ${item.hostel_name} Caretaker)</div>`;
+          }
         } else if (isVerifying) {
           actionAreaHtml = `<div style="font-size:0.85em; color:#d35400; font-weight:bold; margin-top:10px; background:#fff8e1; padding:8px; border-radius:4px; text-align:center;">⌛ Awaiting Student Verification</div>`;
         }
