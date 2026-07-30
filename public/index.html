@@ -620,7 +620,7 @@
 
   let filterMyIssuesOnly = true;
 
-  function selectRole(role) {
+  function selectRole(role, isRestoring = false) {
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('mainPortalContent').style.display = 'block';
 
@@ -628,19 +628,19 @@
 
     if (role === 'student') {
       roleTag.innerText = 'Mode: Student Portal';
-      switchRole('student');
+      switchRole('student', isRestoring);
     } else if (role === 'secretary') {
       roleTag.innerText = 'Mode: Maintenance Secretary Portal';
-      switchRole('secretary');
+      switchRole('secretary', isRestoring);
     } else if (role === 'caretaker') {
       roleTag.innerText = 'Mode: Caretaker Portal';
-      switchRole('caretaker');
+      switchRole('caretaker', isRestoring);
     } else if (role === 'warden') {
       roleTag.innerText = 'Mode: Warden Portal';
-      switchRole('warden');
+      switchRole('warden', isRestoring);
     } else if (role === 'admin') {
       roleTag.innerText = 'Mode: Admin Portal';
-      switchRole('admin');
+      switchRole('admin', isRestoring);
     }
   }
 
@@ -721,19 +721,15 @@
     }
   }
 
-  function switchRole(role) {
+  function switchRole(role, isRestoring = false) {
     currentRole = role;
 
-    if (role === 'student') {
-      resetStudentLogin();
-    } else if (role === 'secretary') {
-      resetSecretaryLogin();
-    } else if (role === 'caretaker') {
-      resetCaretakerLogin();
-    } else if (role === 'warden') {
-      resetWardenLogin();
-    } else if (role === 'admin') {
-      resetAdminLogin();
+    if (!isRestoring) {
+      if (role === 'student') resetStudentLogin();
+      else if (role === 'secretary') resetSecretaryLogin();
+      else if (role === 'caretaker') resetCaretakerLogin();
+      else if (role === 'warden') resetWardenLogin();
+      else if (role === 'admin') resetAdminLogin();
     }
 
     loadComplaints();
@@ -805,7 +801,7 @@
       loggedInKerberos = data.kerberos_id;
       isStudentVerified = true;
 
-      sessionStorage.setItem('student_session', JSON.stringify({
+      localStorage.setItem('student_session', JSON.stringify({
         verified: true,
         kerberos_id: data.kerberos_id
       }));
@@ -835,7 +831,7 @@
   }
 
   function resetStudentLogin() {
-    sessionStorage.removeItem('student_session');
+    localStorage.removeItem('student_session');
     loggedInKerberos = "";
     isStudentVerified = false;
     filterMyIssuesOnly = true;
@@ -918,7 +914,7 @@
       selectedSecretaryHostel = hostel;
       isSecretaryVerified = true;
 
-      sessionStorage.setItem('secretary_session', JSON.stringify({
+      localStorage.setItem('secretary_session', JSON.stringify({
         verified: true,
         hostel: hostel
       }));
@@ -940,7 +936,7 @@
   }
 
   function resetSecretaryLogin() {
-    sessionStorage.removeItem('secretary_session');
+    localStorage.removeItem('secretary_session');
     selectedSecretaryHostel = "";
     isSecretaryVerified = false;
 
@@ -1044,7 +1040,7 @@
       selectedWardenHostel = hostel;
       isWardenVerified = true;
 
-      sessionStorage.setItem('warden_session', JSON.stringify({
+      localStorage.setItem('warden_session', JSON.stringify({
         verified: true,
         hostel: hostel
       }));
@@ -1066,7 +1062,7 @@
   }
 
   function resetWardenLogin() {
-    sessionStorage.removeItem('warden_session');
+    localStorage.removeItem('warden_session');
     selectedWardenHostel = "";
     isWardenVerified = false;
 
@@ -1220,7 +1216,7 @@
       selectedCaretakerHostel = hostel;
       isCaretakerVerified = true;
 
-      sessionStorage.setItem('caretaker_session', JSON.stringify({
+      localStorage.setItem('caretaker_session', JSON.stringify({
         verified: true,
         hostel: hostel
       }));
@@ -1242,7 +1238,7 @@
   }
 
   function resetCaretakerLogin() {
-    sessionStorage.removeItem('caretaker_session');
+    localStorage.removeItem('caretaker_session');
     selectedCaretakerHostel = "";
     isCaretakerVerified = false;
 
@@ -1351,7 +1347,7 @@
       alert('Verified! Admin Access Unlocked.');
       isAdminVerified = true;
 
-      sessionStorage.setItem('admin_session', JSON.stringify({ verified: true }));
+      localStorage.setItem('admin_session', JSON.stringify({ verified: true }));
 
       document.getElementById('activeRoleTag').innerText = 'Mode: Admin Portal (Verified Master)';
       
@@ -1376,7 +1372,7 @@
   }
 
   function resetAdminLogin() {
-    sessionStorage.removeItem('admin_session');
+    localStorage.removeItem('admin_session');
     isAdminVerified = false;
 
     document.getElementById('admin_login_otp_input').value = "";
@@ -1633,18 +1629,20 @@
     }
   }
 
-  // Auto-open requested portal role and restore session on page reload
+  // Restore session on reload
   window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roleFromUrl = urlParams.get('role');
 
     if (roleFromUrl) {
-      selectRole(roleFromUrl);
+      // Check for saved session FIRST
+      let hasSession = false;
 
-      // Restore Student Session
       if (roleFromUrl === 'student') {
-        const saved = JSON.parse(sessionStorage.getItem('student_session') || '{}');
+        const saved = JSON.parse(localStorage.getItem('student_session') || '{}');
         if (saved.verified && saved.kerberos_id) {
+          hasSession = true;
+          selectRole('student', true);
           loggedInKerberos = saved.kerberos_id;
           isStudentVerified = true;
           document.getElementById('sub_kerberos').value = loggedInKerberos;
@@ -1657,50 +1655,42 @@
           document.getElementById('dashboardTitle').innerText = 'Student Feed';
           filterMyIssuesOnly = true;
           updateFilterUI();
-          loadComplaints();
         }
-      }
-
-      // Restore Secretary Session
-      if (roleFromUrl === 'secretary') {
-        const saved = JSON.parse(sessionStorage.getItem('secretary_session') || '{}');
+      } else if (roleFromUrl === 'secretary') {
+        const saved = JSON.parse(localStorage.getItem('secretary_session') || '{}');
         if (saved.verified && saved.hostel) {
+          hasSession = true;
+          selectRole('secretary', true);
           selectedSecretaryHostel = saved.hostel;
           isSecretaryVerified = true;
           document.getElementById('activeRoleTag').innerText = `Mode: Maintenance Secretary (${saved.hostel})`;
           document.getElementById('secretaryLoginCard').style.display = 'none';
-          loadComplaints();
         }
-      }
-
-      // Restore Caretaker Session
-      if (roleFromUrl === 'caretaker') {
-        const saved = JSON.parse(sessionStorage.getItem('caretaker_session') || '{}');
+      } else if (roleFromUrl === 'caretaker') {
+        const saved = JSON.parse(localStorage.getItem('caretaker_session') || '{}');
         if (saved.verified && saved.hostel) {
+          hasSession = true;
+          selectRole('caretaker', true);
           selectedCaretakerHostel = saved.hostel;
           isCaretakerVerified = true;
           document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${saved.hostel})`;
           document.getElementById('caretakerHostelSelectCard').style.display = 'none';
-          loadComplaints();
         }
-      }
-
-      // Restore Warden Session
-      if (roleFromUrl === 'warden') {
-        const saved = JSON.parse(sessionStorage.getItem('warden_session') || '{}');
+      } else if (roleFromUrl === 'warden') {
+        const saved = JSON.parse(localStorage.getItem('warden_session') || '{}');
         if (saved.verified && saved.hostel) {
+          hasSession = true;
+          selectRole('warden', true);
           selectedWardenHostel = saved.hostel;
           isWardenVerified = true;
           document.getElementById('activeRoleTag').innerText = `Mode: Warden Portal (${saved.hostel})`;
           document.getElementById('wardenLoginCard').style.display = 'none';
-          loadComplaints();
         }
-      }
-
-      // Restore Admin Session
-      if (roleFromUrl === 'admin') {
-        const saved = JSON.parse(sessionStorage.getItem('admin_session') || '{}');
+      } else if (roleFromUrl === 'admin') {
+        const saved = JSON.parse(localStorage.getItem('admin_session') || '{}');
         if (saved.verified) {
+          hasSession = true;
+          selectRole('admin', true);
           isAdminVerified = true;
           document.getElementById('activeRoleTag').innerText = 'Mode: Admin Portal (Verified Master)';
           document.getElementById('adminLoginCard').style.display = 'none';
@@ -1709,8 +1699,13 @@
           document.getElementById('hostelFilterGroup').style.display = 'flex'; 
           document.getElementById('dashboardTitle').innerText = 'Admin Management Console';
           document.getElementById('dashboardSubtitle').innerText = 'Full system access & hostel filters';
-          loadComplaints();
         }
+      }
+
+      if (!hasSession) {
+        selectRole(roleFromUrl, false);
+      } else {
+        loadComplaints();
       }
     }
   });
