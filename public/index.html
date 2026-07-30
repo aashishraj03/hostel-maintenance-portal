@@ -120,6 +120,9 @@
     .back-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
     .back-btn { background: #64748b; color: #ffffff; padding: 6px 14px; border-radius: 5px; font-size: 0.85em; border: none; cursor: pointer; }
     .back-btn:hover { background: #475569; }
+    
+    .logout-btn { background: #e74c3c; color: #ffffff; padding: 6px 14px; border-radius: 5px; font-size: 0.85em; border: none; cursor: pointer; font-weight: bold; }
+    .logout-btn:hover { background: #c0392b; }
 
     .filter-bar { background: #2c3e50; color: white; padding: 15px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
     .filter-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -222,7 +225,7 @@
         <span>→</span>
       </a>
 
-      <!-- WARDEN LOGIN BUTTON (PLACED BELOW CARETAKER) -->
+      <!-- WARDEN LOGIN BUTTON -->
       <a href="?role=warden" target="_blank" class="role-option-btn" style="text-decoration: none;">
         <span>🏛️ Warden Login</span>
         <span>→</span>
@@ -239,7 +242,10 @@
   <div id="mainPortalContent" style="display: none;">
     <div class="back-bar">
       <button class="back-btn" onclick="showLandingPage()">← Back to Main Menu</button>
-      <span id="activeRoleTag" style="font-weight: bold; color: #2c3e50; font-size: 0.9em;"></span>
+      <div>
+        <span id="activeRoleTag" style="font-weight: bold; color: #2c3e50; font-size: 0.9em; margin-right: 10px;"></span>
+        <button id="staffLogoutBtn" class="logout-btn" style="display: none;" onclick="logoutStaff()">🚪 Logout</button>
+      </div>
     </div>
 
     <h1>Campus Maintenance Portal</h1>
@@ -364,7 +370,7 @@
       </div>
     </div>
 
-    <!-- CONTAINER CARD 4: WARDEN LOGIN CARD (MOVED BELOW CARETAKER) -->
+    <!-- CONTAINER CARD 4: WARDEN LOGIN CARD -->
     <div class="card" id="wardenLoginCard" style="display: none; background: #eef9f6; border: 1px solid #a2e8dd;">
       <h2 style="margin-top: 0; color: #0d7a5f;">🏛️ Hostel Warden Portal</h2>
       
@@ -625,6 +631,14 @@
     document.getElementById('mainPortalContent').style.display = 'block';
 
     const roleTag = document.getElementById('activeRoleTag');
+    const logoutBtn = document.getElementById('staffLogoutBtn');
+
+    // Show explicit logout button only for persistent staff roles (Caretaker & Warden)
+    if (role === 'caretaker' || role === 'warden') {
+      logoutBtn.style.display = 'inline-block';
+    } else {
+      logoutBtn.style.display = 'none';
+    }
 
     if (role === 'student') {
       roleTag.innerText = 'Mode: Student Portal';
@@ -633,10 +647,10 @@
       roleTag.innerText = 'Mode: Maintenance Secretary Portal';
       switchRole('secretary', isRestoring);
     } else if (role === 'caretaker') {
-      roleTag.innerText = 'Mode: Caretaker Portal';
+      roleTag.innerText = `Mode: Caretaker Portal${selectedCaretakerHostel ? ' (' + selectedCaretakerHostel + ')' : ''}`;
       switchRole('caretaker', isRestoring);
     } else if (role === 'warden') {
-      roleTag.innerText = 'Mode: Warden Portal';
+      roleTag.innerText = `Mode: Warden Portal${selectedWardenHostel ? ' (' + selectedWardenHostel + ')' : ''}`;
       switchRole('warden', isRestoring);
     } else if (role === 'admin') {
       roleTag.innerText = 'Mode: Admin Portal';
@@ -644,22 +658,20 @@
     }
   }
 
+  // Navigation back to Landing Page without terminating Caretaker/Warden session
   function showLandingPage() {
-    // Clear active sessions when returning to landing page
-    sessionStorage.removeItem('student_session');
-    sessionStorage.removeItem('secretary_session');
-    sessionStorage.removeItem('caretaker_session');
-    sessionStorage.removeItem('warden_session');
-    sessionStorage.removeItem('admin_session');
-
-    isStudentVerified = false;
-    isSecretaryVerified = false;
-    isCaretakerVerified = false;
-    isWardenVerified = false;
-    isAdminVerified = false;
-
     document.getElementById('landingPage').style.display = 'block';
     document.getElementById('mainPortalContent').style.display = 'none';
+  }
+
+  // Dedicated explicit logout handler for staff
+  function logoutStaff() {
+    if (currentRole === 'caretaker') {
+      resetCaretakerLogin();
+    } else if (currentRole === 'warden') {
+      resetWardenLogin();
+    }
+    showLandingPage();
   }
 
   // --- PUBLIC ISSUE MODAL HANDLERS ---
@@ -757,8 +769,8 @@
     if (!isRestoring) {
       if (role === 'student') resetStudentLogin();
       else if (role === 'secretary') resetSecretaryLogin();
-      else if (role === 'caretaker') resetCaretakerLogin();
-      else if (role === 'warden') resetWardenLogin();
+      else if (role === 'caretaker' && !isCaretakerVerified) resetCaretakerLogin();
+      else if (role === 'warden' && !isWardenVerified) resetWardenLogin();
       else if (role === 'admin') resetAdminLogin();
     }
 
@@ -1070,12 +1082,14 @@
       selectedWardenHostel = hostel;
       isWardenVerified = true;
 
-      sessionStorage.setItem('warden_session', JSON.stringify({
+      // PERSISTENT STAFF SESSION (localStorage)
+      localStorage.setItem('warden_session', JSON.stringify({
         verified: true,
         hostel: hostel
       }));
 
       document.getElementById('activeRoleTag').innerText = `Mode: Warden Portal (${hostel})`;
+      document.getElementById('staffLogoutBtn').style.display = 'inline-block';
       document.getElementById('wardenLoginCard').style.display = 'none';
       document.getElementById('studentLoginCard').style.display = 'none';
       document.getElementById('studentQuickReportCard').style.display = 'none';
@@ -1100,13 +1114,14 @@
   }
 
   function resetWardenLogin() {
-    sessionStorage.removeItem('warden_session');
+    localStorage.removeItem('warden_session');
     selectedWardenHostel = "";
     isWardenVerified = false;
 
     document.getElementById('warden_hostel_dropdown').value = "";
     document.getElementById('wardenLoginStep1').style.display = 'block';
     document.getElementById('wardenLoginStep2').style.display = 'none';
+    document.getElementById('staffLogoutBtn').style.display = 'none';
     
     document.getElementById('wardenLoginCard').style.display = 'block';
     document.getElementById('studentLoginCard').style.display = 'none';
@@ -1254,12 +1269,14 @@
       selectedCaretakerHostel = hostel;
       isCaretakerVerified = true;
 
-      sessionStorage.setItem('caretaker_session', JSON.stringify({
+      // PERSISTENT STAFF SESSION (localStorage)
+      localStorage.setItem('caretaker_session', JSON.stringify({
         verified: true,
         hostel: hostel
       }));
 
       document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${hostel})`;
+      document.getElementById('staffLogoutBtn').style.display = 'inline-block';
       document.getElementById('caretakerHostelSelectCard').style.display = 'none';
       document.getElementById('studentLoginCard').style.display = 'none';
       document.getElementById('studentQuickReportCard').style.display = 'none';
@@ -1284,7 +1301,7 @@
   }
 
   function resetCaretakerLogin() {
-    sessionStorage.removeItem('caretaker_session');
+    localStorage.removeItem('caretaker_session');
     selectedCaretakerHostel = "";
     isCaretakerVerified = false;
     filterMyIssuesOnly = true;
@@ -1292,6 +1309,7 @@
     document.getElementById('caretaker_hostel_dropdown').value = "";
     document.getElementById('ctLoginStep1').style.display = 'block';
     document.getElementById('ctLoginStep2').style.display = 'none';
+    document.getElementById('staffLogoutBtn').style.display = 'none';
     
     document.getElementById('caretakerHostelSelectCard').style.display = 'block';
     document.getElementById('studentLoginCard').style.display = 'none';
@@ -1495,7 +1513,6 @@
     const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`);
     let data = await res.json();
 
-    // Inside loadComplaints() after parsing res.json():
     const statusOrder = {
       'Pending Approval': 1,
       'Pending': 2,
@@ -1510,7 +1527,7 @@
       if (orderA !== orderB) return orderA - orderB;
       return new Date(b.created_at) - new Date(a.created_at);
     });
-    // Client-side Fail-safe: Exclude 'Pending Approval' tickets from Caretaker view
+
     if (currentRole === 'caretaker') {
       data = data.filter(item => item.status !== 'Pending Approval');
     }
@@ -1595,7 +1612,6 @@
         }
       }
       else if (currentRole === 'caretaker') {
-        // Check if complaint belongs to the logged-in caretaker's assigned hostel
         const isMyHostel = item.hostel_name && item.hostel_name.trim().toLowerCase() === selectedCaretakerHostel.trim().toLowerCase();
 
         if (isPending) {
@@ -1691,7 +1707,7 @@
     }
   }
 
-  // Restore session on reload (Only within the same tab)
+  // Restore session on reload
   window.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roleFromUrl = urlParams.get('role');
@@ -1728,13 +1744,12 @@
           document.getElementById('secretaryLoginCard').style.display = 'none';
         }
       } else if (roleFromUrl === 'caretaker') {
-        const saved = JSON.parse(sessionStorage.getItem('caretaker_session') || '{}');
+        const saved = JSON.parse(localStorage.getItem('caretaker_session') || '{}');
         if (saved.verified && saved.hostel) {
           hasSession = true;
-          selectRole('caretaker', true);
           selectedCaretakerHostel = saved.hostel;
           isCaretakerVerified = true;
-          document.getElementById('activeRoleTag').innerText = `Mode: Caretaker Portal (${saved.hostel})`;
+          selectRole('caretaker', true);
           document.getElementById('caretakerHostelSelectCard').style.display = 'none';
           
           document.getElementById('portalFilterBar').style.display = 'flex';
@@ -1744,13 +1759,12 @@
           updateFilterUI();
         }
       } else if (roleFromUrl === 'warden') {
-        const saved = JSON.parse(sessionStorage.getItem('warden_session') || '{}');
+        const saved = JSON.parse(localStorage.getItem('warden_session') || '{}');
         if (saved.verified && saved.hostel) {
           hasSession = true;
-          selectRole('warden', true);
           selectedWardenHostel = saved.hostel;
           isWardenVerified = true;
-          document.getElementById('activeRoleTag').innerText = `Mode: Warden Portal (${saved.hostel})`;
+          selectRole('warden', true);
           document.getElementById('wardenLoginCard').style.display = 'none';
 
           document.getElementById('portalFilterBar').style.display = 'flex';

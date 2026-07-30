@@ -7472,7 +7472,7 @@ app.get('/api/complaints', async (req, res) => {
       SET status = 'Resolved (Auto)' 
       WHERE status = 'Awaiting Verification' 
         AND fix_submitted_at IS NOT NULL
-        AND fix_submitted_at < NOW() - INTERVAL '1 hours';
+        AND fix_submitted_at < NOW() - INTERVAL '24 hours';
     `;
     await pool.query(autoResolveQuery);
 
@@ -7520,7 +7520,7 @@ app.get('/api/complaints', async (req, res) => {
       query += `
         AND status = 'Pending'
         AND (
-          created_at < NOW() - INTERVAL '1 hours'
+          created_at < NOW() - INTERVAL '72 hours'
           OR COALESCE(rejection_count, 0) >= 3
         )
       `;
