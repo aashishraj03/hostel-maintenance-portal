@@ -7714,14 +7714,24 @@ const upload = multer({
 });
 
 // --- Nodemailer Transporter (Gmail OAuth2) ---
+// const transporter = nodemailer.createTransport({
+//   service: 'gmail',
+//   auth: {
+//     type: 'OAuth2',
+//     user: process.env.EMAIL_USER,
+//     clientId: process.env.GMAIL_CLIENT_ID,
+//     clientSecret: process.env.GMAIL_CLIENT_SECRET,
+//     refreshToken: process.env.GMAIL_REFRESH_TOKEN
+//   }
+// });
+
+
+// Replace your existing OAuth2 transporter setup with this:
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    type: 'OAuth2',
-    user: process.env.EMAIL_USER,
-    clientId: process.env.GMAIL_CLIENT_ID,
-    clientSecret: process.env.GMAIL_CLIENT_SECRET,
-    refreshToken: process.env.GMAIL_REFRESH_TOKEN
+    user: process.env.EMAIL_USER, // e.g. aashishraj0310@gmail.com
+    pass: process.env.EMAIL_PASS // 16-character App Password
   }
 });
 
