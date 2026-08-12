@@ -1671,7 +1671,7 @@
         else if (currentRole === 'student') {
           const isOwner = item.kerberos_id && item.kerberos_id.trim().toLowerCase() === loggedInKerberos.toLowerCase();
 
-          if (isOwner && !isVerifying && !isResolved) {
+          if (isOwner) {
             actionAreaHtml = `
               <div style="margin-top: 10px; text-align: right;">
                 <button onclick="deleteStudentComplaint(${item.id})" class="btn-danger" style="padding: 6px 12px; font-size: 0.85em;">
