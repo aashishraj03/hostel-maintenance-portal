@@ -1705,6 +1705,7 @@
         }
 
         const card = document.createElement('div');
+        card.id = `complaint-card-${item.id}`;
         card.className = cardClass;
         card.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1744,10 +1745,42 @@
     }
   }
 
+  // async function deleteStudentComplaint(id) {
+  // if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) {
+  //   return;
+  // }
+
   async function deleteStudentComplaint(id) {
   if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) {
     return;
   }
+
+  try {
+    const res = await fetch(`/api/complaints/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kerberos_id: loggedInKerberos })
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert('✅ Issue deleted successfully.');
+      
+      // OPTION 1: Instantly remove the card element from the DOM
+      const cardElement = document.getElementById(`complaint-card-${id}`);
+      if (cardElement) {
+        cardElement.remove();
+      } else {
+        loadComplaints(); // Fallback refetch if ID wrapper isn't found
+      }
+    } else {
+      alert(data.error || 'Failed to delete issue.');
+    }
+  } catch (err) {
+    alert('Network error while deleting issue.');
+  }
+}
 
   try {
     const res = await fetch(`/api/complaints/${id}`, {
