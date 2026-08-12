@@ -1755,30 +1755,30 @@
     return;
   }
 
-  try {
-    const res = await fetch(`/api/complaints/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kerberos_id: loggedInKerberos })
-    });
+    try {
+      const res = await fetch(`/api/complaints/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kerberos_id: loggedInKerberos })
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (res.ok) {
-      alert('✅ Issue deleted successfully.');
-      
-      // OPTION 1: Instantly remove the card element from the DOM
-      const cardElement = document.getElementById(`complaint-card-${id}`);
-      if (cardElement) {
-        cardElement.remove();
+      if (res.ok) {
+        alert('✅ Issue deleted successfully.');
+        
+        // OPTION 1: Instantly remove the card element from the DOM
+        const cardElement = document.getElementById(`complaint-card-${id}`);
+        if (cardElement) {
+          cardElement.remove();
+        }
+      } else {
+        alert(data.error || 'Failed to delete issue.');
       }
-    } else {
-      alert(data.error || 'Failed to delete issue.');
+    } catch (err) {
+      alert('Network error while deleting issue.');
     }
-  } catch (err) {
-    alert('Network error while deleting issue.');
   }
-}
 
   try {
     const res = await fetch(`/api/complaints/${id}`, {
