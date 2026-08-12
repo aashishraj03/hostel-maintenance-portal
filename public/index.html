@@ -1771,8 +1771,6 @@
       const cardElement = document.getElementById(`complaint-card-${id}`);
       if (cardElement) {
         cardElement.remove();
-      } else {
-        loadComplaints(); // Fallback refetch if ID wrapper isn't found
       }
     } else {
       alert(data.error || 'Failed to delete issue.');
