@@ -7735,20 +7735,70 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Helper: Caretaker Email Mapping
+// Hardcoded lookup map for Caretakers (Aravali Hostel)
+const CARETAKER_EMAILS = {
+  // "Aravali": "caretakeraravali@iitd.ac.in" 
+};
+
 function getCaretakerEmail(hostel) {
-  return process.env.CARETAKER_EMAIL || "aashishraj0310@gmail.com";
-}
+  if (!hostel) return "aashishraj0310@gmail.com";
 
-// Helper: Maintenance Secretary Email Mapping
+  // Case-insensitive match (handles "aravali", "Aravali", "ARAVALI")
+  const key = Object.keys(CARETAKER_EMAILS).find(
+    (h) => h.toLowerCase() === hostel.trim().toLowerCase()
+  );
+
+  // Returns Aravali caretaker email if matched, otherwise falls back to your email
+  return CARETAKER_EMAILS[key] || "aashishraj0310@gmail.com";
+}
+// // Helper: Caretaker Email Mapping
+// function getCaretakerEmail(hostel) {
+//   return process.env.CARETAKER_EMAIL || "aashishraj0310@gmail.com";
+// }
+
+
+// Hardcoded lookup map for Maintenance Secretary (Aravali Hostel)
+const SECRETARY_EMAILS = {
+  // "Aravali": "ch7240990@iitd.ac.in"  
+};
+
 function getSecretaryEmail(hostel) {
-  return process.env.SECRETARY_EMAIL || "aashishraj0310@gmail.com";
-}
+  if (!hostel) return "aashishraj0310@gmail.com";
 
-// Helper: Warden Email Mapping
-function getWardenEmail(hostel) {
-  return process.env.WARDEN_EMAIL || "aashishraj0310@gmail.com";
+  // Case-insensitive match (handles "aravali", "Aravali", "ARAVALI")
+  const key = Object.keys(SECRETARY_EMAILS).find(
+    (h) => h.toLowerCase() === hostel.trim().toLowerCase()
+  );
+
+  // Returns Aravali secretary email if matched, otherwise falls back to your email
+  return SECRETARY_EMAILS[key] || "aashishraj0310@gmail.com";
 }
+// Helper: Maintenance Secretary Email Mapping
+// function getSecretaryEmail(hostel) {
+//   return process.env.SECRETARY_EMAIL || "aashishraj0310@gmail.com";
+// }
+
+
+// Hardcoded lookup map for Aravali Hostel only
+const WARDEN_EMAILS = {
+  // "Aravali": "wdnmara@iitd.ac.in"
+};
+
+function getWardenEmail(hostel) {
+  if (!hostel) return "aashishraj0310@gmail.com";
+
+  // Case-insensitive match (handles "aravali", "Aravali", "ARAVALI")
+  const key = Object.keys(WARDEN_EMAILS).find(
+    (h) => h.toLowerCase() === hostel.trim().toLowerCase()
+  );
+
+  // Returns Aravali warden email if it matches, otherwise falls back to your email
+  return WARDEN_EMAILS[key] || "aashishraj0310@gmail.com";
+}
+// Helper: Warden Email Mapping
+// function getWardenEmail(hostel) {
+//   return process.env.WARDEN_EMAIL || "aashishraj0310@gmail.com";
+// }
 
 // Helper: Generate 6-digit OTP
 function generateOTP() {
@@ -8586,6 +8636,40 @@ app.post('/api/admin/verify-login-otp', async (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message || "Verification failed" });
+  }
+});
+
+
+// =================================================================
+// 8. STUDENT DELETE COMPLAINT ENDPOINT
+// =================================================================
+app.delete('/api/complaints/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { kerberos_id } = req.body;
+
+    if (!kerberos_id) {
+      return res.status(400).json({ error: "Kerberos ID is required to delete an issue." });
+    }
+
+    // Deletes the complaint only if the Kerberos ID matches the owner
+    const deleteQuery = `
+      DELETE FROM complaints 
+      WHERE id = $1 AND LOWER(kerberos_id) = LOWER($2)
+      RETURNING *;
+    `;
+    const result = await pool.query(deleteQuery, [id, kerberos_id.trim()]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ 
+        error: "Complaint not found or you do not have permission to delete this issue." 
+      });
+    }
+
+    return res.json({ success: true, message: `Complaint #${id} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting complaint:", err);
+    return res.status(500).json({ error: err.message || "Failed to delete complaint" });
   }
 });
 
