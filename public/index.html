@@ -92,7 +92,6 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
     }
 
-    /* --- QUICK REPORT BUTTON STYLES --- */
     .quick-report-btn {
       display: flex;
       align-items: center;
@@ -143,10 +142,6 @@
       cursor: pointer;
       transition: all 0.2s ease;
       box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    .caretaker-dropdown-select:hover {
-      border-color: #1b4f72;
-      background-color: #f4faff;
     }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
@@ -609,20 +604,34 @@
   let isWardenVerified = false;
 
   let isAdminVerified = false;
-
   let filterMyIssuesOnly = true;
-
-  // Monotonically increasing sequence number used to discard stale
-  // /api/complaints responses when multiple loadComplaints() calls overlap.
   let complaintsRequestSeq = 0;
 
-  // FIX (speed): now that photos are Cloudinary URLs, we can ask Cloudinary
-  // to serve a small, auto-compressed thumbnail for the grid view instead
-  // of the full-resolution original. This only rewrites the URL used for
-  // the <img> src in the card grid — the original full-quality URL is still
-  // what gets opened in the lightbox on click. Non-Cloudinary URLs (e.g. old
-  // /uploads/ paths from before the Cloudinary migration) pass through
-  // unchanged.
+  function getAuthToken() {
+    if (currentRole === 'student') return localStorage.getItem('student_token') || sessionStorage.getItem('student_token');
+    if (currentRole === 'caretaker') return localStorage.getItem('caretaker_token');
+    if (currentRole === 'secretary') return localStorage.getItem('secretary_token');
+    if (currentRole === 'warden') return localStorage.getItem('warden_token');
+    if (currentRole === 'admin') return localStorage.getItem('admin_token');
+    return null;
+  }
+
+  function getAuthHeaders() {
+    const token = getAuthToken();
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>'"]/g, tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag));
+  }
+
   function cloudinaryThumb(url) {
     if (url && url.includes('/upload/')) {
       return url.replace('/upload/', '/upload/w_500,q_auto,f_auto,c_limit/');
@@ -637,7 +646,7 @@
     const roleTag = document.getElementById('activeRoleTag');
     const logoutBtn = document.getElementById('staffLogoutBtn');
 
-    if (role === 'caretaker' || role === 'warden') {
+    if (role === 'caretaker' || role === 'warden' || role === 'secretary' || role === 'admin' || role === 'student') {
       logoutBtn.style.display = 'inline-block';
     } else {
       logoutBtn.style.display = 'none';
@@ -667,11 +676,11 @@
   }
 
   function logoutStaff() {
-    if (currentRole === 'caretaker') {
-      resetCaretakerLogin();
-    } else if (currentRole === 'warden') {
-      resetWardenLogin();
-    }
+    if (currentRole === 'student') resetStudentLogin();
+    else if (currentRole === 'secretary') resetSecretaryLogin();
+    else if (currentRole === 'caretaker') resetCaretakerLogin();
+    else if (currentRole === 'warden') resetWardenLogin();
+    else if (currentRole === 'admin') resetAdminLogin();
     showLandingPage();
   }
 
@@ -855,7 +864,8 @@
       loggedInKerberos = data.kerberos_id;
       isStudentVerified = true;
 
-      sessionStorage.setItem('student_session', JSON.stringify({
+      localStorage.setItem('student_token', data.token);
+      localStorage.setItem('student_session', JSON.stringify({
         verified: true,
         kerberos_id: data.kerberos_id
       }));
@@ -885,6 +895,9 @@
   }
 
   function resetStudentLogin() {
+    localStorage.removeItem('student_token');
+    localStorage.removeItem('student_session');
+    sessionStorage.removeItem('student_token');
     sessionStorage.removeItem('student_session');
     loggedInKerberos = "";
     isStudentVerified = false;
@@ -967,7 +980,8 @@
       selectedSecretaryHostel = hostel;
       isSecretaryVerified = true;
 
-      sessionStorage.setItem('secretary_session', JSON.stringify({
+      localStorage.setItem('secretary_token', data.token);
+      localStorage.setItem('secretary_session', JSON.stringify({
         verified: true,
         hostel: hostel
       }));
@@ -989,7 +1003,8 @@
   }
 
   function resetSecretaryLogin() {
-    sessionStorage.removeItem('secretary_session');
+    localStorage.removeItem('secretary_token');
+    localStorage.removeItem('secretary_session');
     selectedSecretaryHostel = "";
     isSecretaryVerified = false;
 
@@ -1018,7 +1033,10 @@
     try {
       const res = await fetch(`/api/secretary/action-complaint/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ approve })
       });
       const data = await res.json();
@@ -1092,6 +1110,7 @@
       selectedWardenHostel = hostel;
       isWardenVerified = true;
 
+      localStorage.setItem('warden_token', data.token);
       localStorage.setItem('warden_session', JSON.stringify({
         verified: true,
         hostel: hostel
@@ -1122,6 +1141,7 @@
   }
 
   function resetWardenLogin() {
+    localStorage.removeItem('warden_token');
     localStorage.removeItem('warden_session');
     selectedWardenHostel = "";
     isWardenVerified = false;
@@ -1158,6 +1178,7 @@
     try {
       const res = await fetch('/api/complaints/submit-direct', {
         method: 'POST',
+        headers: getAuthHeaders(),
         body: formData
       });
       const data = await res.json();
@@ -1198,7 +1219,10 @@
     try {
       const res = await fetch(`/api/complaints/verify-direct/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ approved, rejection_reason: rejectionReason })
       });
 
@@ -1275,6 +1299,7 @@
       selectedCaretakerHostel = hostel;
       isCaretakerVerified = true;
 
+      localStorage.setItem('caretaker_token', data.token);
       localStorage.setItem('caretaker_session', JSON.stringify({
         verified: true,
         hostel: hostel
@@ -1305,6 +1330,7 @@
   }
 
   function resetCaretakerLogin() {
+    localStorage.removeItem('caretaker_token');
     localStorage.removeItem('caretaker_session');
     selectedCaretakerHostel = "";
     isCaretakerVerified = false;
@@ -1349,6 +1375,7 @@
     try {
       const res = await fetch(`/api/complaints/submit-fix/${id}`, {
         method: 'POST',
+        headers: getAuthHeaders(),
         body: formData
       });
       const data = await res.json();
@@ -1414,7 +1441,8 @@
       alert('Verified! Admin Access Unlocked.');
       isAdminVerified = true;
 
-      sessionStorage.setItem('admin_session', JSON.stringify({ verified: true }));
+      localStorage.setItem('admin_token', data.token);
+      localStorage.setItem('admin_session', JSON.stringify({ verified: true }));
 
       document.getElementById('activeRoleTag').innerText = 'Mode: Admin Portal (Verified Master)';
       
@@ -1439,7 +1467,8 @@
   }
 
   function resetAdminLogin() {
-    sessionStorage.removeItem('admin_session');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_session');
     isAdminVerified = false;
 
     document.getElementById('admin_login_otp_input').value = "";
@@ -1490,15 +1519,8 @@
     loadComplaints(searchText);
   }
 
-  // OPTIMIZED LOAD COMPLAINTS WITH STRICT CLIENT-SIDE ISOLATION FAILSAFE
-  // FIX: guarded with a request sequence number so overlapping/out-of-order
-  // calls to loadComplaints() can no longer double-render cards or let a
-  // stale response (e.g. from a previous hostel filter) overwrite a newer one.
   async function loadComplaints(searchQuery = '') {
     const container = document.getElementById('complaintsList');
-
-    // Stamp this invocation. If a newer call starts before this one
-    // finishes, this call's response will be discarded below.
     const mySeq = ++complaintsRequestSeq;
 
     if (currentRole === 'caretaker' && !isCaretakerVerified) return;
@@ -1522,18 +1544,17 @@
     }
 
     try {
-      const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`);
+      const res = await fetch(`/api/complaints?hostel=${encodeURIComponent(activeHostel)}&role=${encodeURIComponent(currentRole)}`, {
+        headers: getAuthHeaders()
+      });
       let data = await res.json();
 
-      // A newer loadComplaints() call has since started — this response
-      // is stale, so drop it instead of rendering/clearing the DOM with it.
       if (mySeq !== complaintsRequestSeq) return;
 
       if (!Array.isArray(data)) {
         data = [];
       }
 
-      // Hard Failsafe: Enforce strict hostel filtering client-side
       if (activeHostel && activeHostel !== 'ALL') {
         data = data.filter(item => 
           item.hostel_name && item.hostel_name.trim().toLowerCase() === activeHostel.trim().toLowerCase()
@@ -1569,10 +1590,6 @@
         }
       }
 
-      // Only now — right before we actually render — do we clear the
-      // container. Doing this earlier (at the top of the function) is
-      // what allowed two overlapping calls to both append into an
-      // already-cleared grid, producing duplicate cards.
       container.innerHTML = '';
 
       if (data.length === 0) {
@@ -1598,7 +1615,7 @@
         if (isResolved) badgeClass += ' resolved';
         if (isAutoResolved) badgeClass += ' auto-resolved';
 
-        const displayStatus = isAutoResolved ? 'Resolved' : item.status;
+        const displayStatus = isAutoResolved ? 'Resolved' : escapeHTML(item.status);
         const autoTagHtml = isAutoResolved ? `<span class="auto-badge">⚡ Auto-Resolved (24h)</span>` : '';
 
         const issuePhotoSrc = (item.issue_photo && (item.issue_photo.startsWith('http') || item.issue_photo.startsWith('data:'))) 
@@ -1623,7 +1640,7 @@
         if (item.rejection_count > 0) {
           rejectionHtml = `
             <div class="rejection-box">
-              <strong>⚠️ Rejected ${item.rejection_count} time(s):</strong> "${item.last_rejection_reason || 'No specific reason given.'}"
+              <strong>⚠️ Rejected ${item.rejection_count} time(s):</strong> "${escapeHTML(item.last_rejection_reason) || 'No specific reason given.'}"
             </div>
           `;
         }
@@ -1662,7 +1679,7 @@
                 </div>
               `;
             } else {
-              actionAreaHtml = `<div style="font-size:0.82em; color:#7f8c8d; margin-top:10px; background:#f8f9fa; padding:8px; border-radius:4px; text-align:center;">🔒 Read-Only (Assigned to ${item.hostel_name} Caretaker)</div>`;
+              actionAreaHtml = `<div style="font-size:0.82em; color:#7f8c8d; margin-top:10px; background:#f8f9fa; padding:8px; border-radius:4px; text-align:center;">🔒 Read-Only (Assigned to ${escapeHTML(item.hostel_name)} Caretaker)</div>`;
             }
           } else if (isVerifying) {
             actionAreaHtml = `<div style="font-size:0.85em; color:#d35400; font-weight:bold; margin-top:10px; background:#fff8e1; padding:8px; border-radius:4px; text-align:center;">⌛ Awaiting Student Verification</div>`;
@@ -1705,12 +1722,11 @@
         }
 
         const card = document.createElement('div');
-        card.id = `complaint-card-${item.id}`;
         card.className = cardClass;
         card.innerHTML = `
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <span class="hostel-tag">${item.hostel_name}</span>
+              <span class="hostel-tag">${escapeHTML(item.hostel_name)}</span>
               <span class="${badgeClass}">${displayStatus}</span>
               ${autoTagHtml}
               ${item.rejection_count > 0 ? `<span class="rejection-badge">Rejected (${item.rejection_count}x)</span>` : ''}
@@ -1718,9 +1734,9 @@
             <small style="color:#888;">${new Date(item.created_at).toLocaleDateString()}</small>
           </div>
 
-          <h3 style="margin: 12px 0 4px 0;">${item.category}</h3>
-          <p style="margin: 0 0 8px 0; color: #666; font-size:0.9em;"><strong>Reporter Kerberos:</strong> ${item.kerberos_id}@iitd.ac.in</p>
-          <p style="margin: 0;">${item.description}</p>
+          <h3 style="margin: 12px 0 4px 0;">${escapeHTML(item.category)}</h3>
+          <p style="margin: 0 0 8px 0; color: #666; font-size:0.9em;"><strong>Reporter Kerberos:</strong> ${escapeHTML(item.kerberos_id)}@iitd.ac.in</p>
+          <p style="margin: 0;">${escapeHTML(item.description)}</p>
           
           ${rejectionHtml}
 
@@ -1738,27 +1754,24 @@
         container.appendChild(card);
       });
     } catch (err) {
-      // Also drop error handling for a stale, superseded call.
       if (mySeq !== complaintsRequestSeq) return;
       console.error("Error loading complaints:", err);
       container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; background: white; border-radius: 8px; color: #c0392b;">Failed to load complaints. Please check your network connection.</div>`;
     }
   }
 
-  // async function deleteStudentComplaint(id) {
-  // if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) {
-  //   return;
-  // }
-
   async function deleteStudentComplaint(id) {
-  if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) {
-    return;
-  }
+    if (!confirm("Are you sure you want to delete this complaint? This cannot be undone.")) {
+      return;
+    }
 
     try {
       const res = await fetch(`/api/complaints/${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ kerberos_id: loggedInKerberos })
       });
 
@@ -1766,12 +1779,7 @@
 
       if (res.ok) {
         alert('✅ Issue deleted successfully.');
-        
-        // OPTION 1: Instantly remove the card element from the DOM
-        const cardElement = document.getElementById(`complaint-card-${id}`);
-        if (cardElement) {
-          cardElement.remove();
-        }
+        loadComplaints();
       } else {
         alert(data.error || 'Failed to delete issue.');
       }
@@ -1779,26 +1787,6 @@
       alert('Network error while deleting issue.');
     }
   }
-
-  try {
-    const res = await fetch(`/api/complaints/${id}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kerberos_id: loggedInKerberos })
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert('✅ Issue deleted successfully.');
-      loadComplaints(); // Refresh feed
-    } else {
-      alert(data.error || 'Failed to delete issue.');
-    }
-  } catch (err) {
-    alert('Network error while deleting issue.');
-  }
-}
 
   function toggleRejectBox(id) {
     const box = document.getElementById(`reject-box-${id}`);
@@ -1812,79 +1800,87 @@
     }
   }
 
-  // Restore session on reload
-  // FIX: removed the redundant trailing loadComplaints() call that used to
-  // fire in addition to the one already triggered inside selectRole() /
-  // switchRole() for each branch below — that duplicate call was the main
-  // source of the "every issue appears twice" bug.
-  window.addEventListener('DOMContentLoaded', () => {
+  async function validateSessionWithServer(role) {
+    const token = localStorage.getItem(`${role}_token`) || sessionStorage.getItem(`${role}_token`);
+    if (!token) return false;
+
+    try {
+      const res = await fetch('/api/auth/validate-session', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      return data.valid;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const roleFromUrl = urlParams.get('role');
 
     if (roleFromUrl) {
       let hasSession = false;
+      const isValidServerSession = await validateSessionWithServer(roleFromUrl);
 
-      if (roleFromUrl === 'student') {
-        const saved = JSON.parse(sessionStorage.getItem('student_session') || '{}');
-        if (saved.verified && saved.kerberos_id) {
-          hasSession = true;
-          selectRole('student', true);
-          loggedInKerberos = saved.kerberos_id;
-          isStudentVerified = true;
-          document.getElementById('sub_kerberos').value = loggedInKerberos;
-          document.getElementById('activeRoleTag').innerText = `Mode: Student Portal (${loggedInKerberos})`;
-          document.getElementById('studentLoginCard').style.display = 'none';
-          document.getElementById('studentQuickReportCard').style.display = 'none';
-          document.getElementById('studentFormCard').style.display = 'block';
-          document.getElementById('portalFilterBar').style.display = 'flex';
-          document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
-          document.getElementById('dashboardTitle').innerText = 'Student Feed';
-          filterMyIssuesOnly = true;
-          updateFilterUI();
-        }
-      } else if (roleFromUrl === 'secretary') {
-        const saved = JSON.parse(sessionStorage.getItem('secretary_session') || '{}');
-        if (saved.verified && saved.hostel) {
-          hasSession = true;
-          selectRole('secretary', true);
-          selectedSecretaryHostel = saved.hostel;
-          isSecretaryVerified = true;
-          document.getElementById('activeRoleTag').innerText = `Mode: Maintenance Secretary (${saved.hostel})`;
-          document.getElementById('secretaryLoginCard').style.display = 'none';
-        }
-      } else if (roleFromUrl === 'caretaker') {
-        const saved = JSON.parse(localStorage.getItem('caretaker_session') || '{}');
-        if (saved.verified && saved.hostel) {
-          hasSession = true;
-          selectedCaretakerHostel = saved.hostel;
-          isCaretakerVerified = true;
-          selectRole('caretaker', true);
-          document.getElementById('caretakerHostelSelectCard').style.display = 'none';
-          
-          document.getElementById('portalFilterBar').style.display = 'flex';
-          document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
-          document.getElementById('dashboardTitle').innerText = 'Caretaker Dashboard';
-          filterMyIssuesOnly = true;
-          updateFilterUI();
-        }
-      } else if (roleFromUrl === 'warden') {
-        const saved = JSON.parse(localStorage.getItem('warden_session') || '{}');
-        if (saved.verified && saved.hostel) {
-          hasSession = true;
-          selectedWardenHostel = saved.hostel;
-          isWardenVerified = true;
-          selectRole('warden', true);
-          document.getElementById('wardenLoginCard').style.display = 'none';
-
-          document.getElementById('portalFilterBar').style.display = 'flex';
-          document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
-          document.getElementById('dashboardTitle').innerText = 'Warden Escalation Console';
-          filterMyIssuesOnly = true;
-          updateFilterUI();
-        }
-      } else if (roleFromUrl === 'admin') {
-        const saved = JSON.parse(sessionStorage.getItem('admin_session') || '{}');
-        if (saved.verified) {
+      if (isValidServerSession) {
+        if (roleFromUrl === 'student') {
+          const saved = JSON.parse(localStorage.getItem('student_session') || sessionStorage.getItem('student_session') || '{}');
+          if (saved.kerberos_id) {
+            hasSession = true;
+            selectRole('student', true);
+            loggedInKerberos = saved.kerberos_id;
+            isStudentVerified = true;
+            document.getElementById('sub_kerberos').value = loggedInKerberos;
+            document.getElementById('activeRoleTag').innerText = `Mode: Student Portal (${loggedInKerberos})`;
+            document.getElementById('studentLoginCard').style.display = 'none';
+            document.getElementById('studentQuickReportCard').style.display = 'none';
+            document.getElementById('studentFormCard').style.display = 'block';
+            document.getElementById('portalFilterBar').style.display = 'flex';
+            document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
+            document.getElementById('dashboardTitle').innerText = 'Student Feed';
+            filterMyIssuesOnly = true;
+            updateFilterUI();
+          }
+        } else if (roleFromUrl === 'secretary') {
+          const saved = JSON.parse(localStorage.getItem('secretary_session') || '{}');
+          if (saved.hostel) {
+            hasSession = true;
+            selectRole('secretary', true);
+            selectedSecretaryHostel = saved.hostel;
+            isSecretaryVerified = true;
+            document.getElementById('activeRoleTag').innerText = `Mode: Maintenance Secretary (${saved.hostel})`;
+            document.getElementById('secretaryLoginCard').style.display = 'none';
+          }
+        } else if (roleFromUrl === 'caretaker') {
+          const saved = JSON.parse(localStorage.getItem('caretaker_session') || '{}');
+          if (saved.hostel) {
+            hasSession = true;
+            selectedCaretakerHostel = saved.hostel;
+            isCaretakerVerified = true;
+            selectRole('caretaker', true);
+            document.getElementById('caretakerHostelSelectCard').style.display = 'none';
+            document.getElementById('portalFilterBar').style.display = 'flex';
+            document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
+            document.getElementById('dashboardTitle').innerText = 'Caretaker Dashboard';
+            filterMyIssuesOnly = true;
+            updateFilterUI();
+          }
+        } else if (roleFromUrl === 'warden') {
+          const saved = JSON.parse(localStorage.getItem('warden_session') || '{}');
+          if (saved.hostel) {
+            hasSession = true;
+            selectedWardenHostel = saved.hostel;
+            isWardenVerified = true;
+            selectRole('warden', true);
+            document.getElementById('wardenLoginCard').style.display = 'none';
+            document.getElementById('portalFilterBar').style.display = 'flex';
+            document.getElementById('myIssuesToggleBtn').style.display = 'inline-block';
+            document.getElementById('dashboardTitle').innerText = 'Warden Escalation Console';
+            filterMyIssuesOnly = true;
+            updateFilterUI();
+          }
+        } else if (roleFromUrl === 'admin') {
           hasSession = true;
           selectRole('admin', true);
           isAdminVerified = true;
@@ -1901,8 +1897,6 @@
       if (!hasSession) {
         selectRole(roleFromUrl, false);
       }
-      // Note: when hasSession is true, selectRole(role, true) above already
-      // triggered loadComplaints() via switchRole(). No extra call needed here.
     }
   });
 </script>
