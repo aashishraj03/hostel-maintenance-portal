@@ -8739,8 +8739,8 @@ app.use(express.urlencoded({ extended: true, limit: '4mb' }));
 
 // --- Rate Limiting for OTP Routes ---
 const otpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per window
+  windowMs: 3 * 60 * 1000, // 3 minutes
+  max: 3, // Limit each IP to 10 requests per window
   message: { error: "Too many OTP requests from this IP. Please try again in 15 minutes." }
 });
 
