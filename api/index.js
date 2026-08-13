@@ -8741,7 +8741,7 @@ app.use(express.urlencoded({ extended: true, limit: '4mb' }));
 const otpLimiter = rateLimit({
   windowMs: 3 * 60 * 1000, // 3 minutes
   max: 3, // Limit each IP to 10 requests per window
-  message: { error: "Too many OTP requests from this IP. Please try again in 15 minutes." }
+  message: { error: "Too many OTP requests from this IP. Please try again in 3 minutes." }
 });
 
 // --- Authentication Middleware ---

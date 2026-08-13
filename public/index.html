@@ -607,6 +607,29 @@
   let filterMyIssuesOnly = true;
   let complaintsRequestSeq = 0;
 
+  /**
+   * Temporarily disables a button to prevent duplicate clicks.
+   * @param {HTMLElement|string} btn - The button element or its ID.
+   * @param {number} delayMs - Duration in milliseconds (default: 5000ms / 5s).
+   * @param {string} loadingText - Optional temporary text while disabled.
+   */
+  function disableButtonTemporarily(btn, delayMs = 5000, loadingText = null) {
+    const buttonEl = typeof btn === 'string' ? document.getElementById(btn) : btn;
+    if (!buttonEl) return;
+
+    const originalText = buttonEl.innerText;
+    buttonEl.disabled = true;
+
+    if (loadingText) {
+      buttonEl.innerText = loadingText;
+    }
+
+    setTimeout(() => {
+      buttonEl.disabled = false;
+      buttonEl.innerText = originalText;
+    }, delayMs);
+  }
+
   function getAuthToken() {
     if (currentRole === 'student') return localStorage.getItem('student_token') || sessionStorage.getItem('student_token');
     if (currentRole === 'caretaker') return localStorage.getItem('caretaker_token');
@@ -846,6 +869,9 @@
       alert('Please enter a valid 6-digit OTP.');
       return;
     }
+
+    const verifyBtn = event?.target || document.querySelector('#stLoginStep2 button');
+    disableButtonTemporarily(verifyBtn, 4000, 'Verifying OTP...');
 
     const res = await fetch('/api/student/verify-login-otp', {
       method: 'POST',
