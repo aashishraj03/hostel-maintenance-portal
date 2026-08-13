@@ -613,7 +613,7 @@
    * @param {number} delayMs - Duration in milliseconds (default: 5000ms / 5s).
    * @param {string} loadingText - Optional temporary text while disabled.
    */
-  function disableButtonTemporarily(btn, delayMs = 5000, loadingText = null) {
+  function disableButtonTemporarily(btn, delayMs = 900, loadingText = null) {
     const buttonEl = typeof btn === 'string' ? document.getElementById(btn) : btn;
     if (!buttonEl) return;
 
@@ -871,7 +871,7 @@
     }
 
     const verifyBtn = event?.target || document.querySelector('#stLoginStep2 button');
-    disableButtonTemporarily(verifyBtn, 4000, 'Verifying OTP...');
+    disableButtonTemporarily(verifyBtn, 900, 'Verifying OTP...');
 
     const res = await fetch('/api/student/verify-login-otp', {
       method: 'POST',
@@ -1239,6 +1239,8 @@
       }
     }
 
+    
+
     const btn = approved ? document.getElementById(`verify-btn-${id}`) : document.getElementById(`reject-sub-btn-${id}`);
     if (btn) btn.disabled = true;
 
@@ -1311,6 +1313,10 @@
       alert('Please enter a valid 6-digit OTP.');
       return;
     }
+
+    const verifyBtn = event?.target || document.querySelector('#stLoginStep2 button');
+    disableButtonTemporarily(verifyBtn, 900, 'Verifying OTP...');
+
 
     const res = await fetch('/api/caretaker/verify-login-otp', {
       method: 'POST',
